@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Illuminate\Http\Request;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\WaiterController;
@@ -10,7 +11,6 @@ use App\Http\Controllers\EventEquipmentController;
 use App\Http\Controllers\EquipmentLogController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ReportController;
-use App\Http\Controllers\PhilippineAddressController;
 
 Route::get('/', function () {
     return redirect()->route('login');
@@ -49,7 +49,6 @@ Route::middleware(['auth'])->group(function () {
             abort(403, 'Only waiters can view this page.');
         }
 
-        // Security: only allow if this waiter is assigned to the event
         $isAssigned = $event->waiters()->where('waiter_id', $waiter->id)->exists();
         if (!$isAssigned) {
             abort(403, 'You are not assigned to this event.');
@@ -57,16 +56,15 @@ Route::middleware(['auth'])->group(function () {
 
         $event->load(['waiters.user', 'equipment.equipmentItem.category', 'equipment.assignedWaiter.user', 'creator']);
 
-        // Get this waiter's specific equipment for this event
         $myEquipment = $event->equipment()->where('assigned_waiter_id', $waiter->id)->with('equipmentItem')->get();
 
-        // Get this waiter's pivot data (role, confirmation status)
         $myAssignment = $event->waiters()->where('waiter_id', $waiter->id)->first();
 
         return view('waiters.event-detail', compact('event', 'myEquipment', 'myAssignment'));
     })->name('waiters.my-event');
+
     // Waiter change own password
-    Route::post('/my-profile/change-password', function (\Illuminate\Http\Request $request) {
+    Route::post('/my-profile/change-password', function (Request $request) {
         $waiter = auth()->user()->waiter;
         if (!$waiter) {
             abort(403, 'Only waiters can change their password here.');
@@ -77,12 +75,10 @@ Route::middleware(['auth'])->group(function () {
             'new_password' => 'required|string|min:6|confirmed',
         ]);
 
-        // Verify current password
         if (!\Illuminate\Support\Facades\Hash::check($validated['current_password'], auth()->user()->password)) {
             return back()->with('password_error', 'Current password is incorrect.');
         }
 
-        // Update password
         auth()->user()->update([
             'password' => \Illuminate\Support\Facades\Hash::make($validated['new_password']),
         ]);
@@ -94,17 +90,17 @@ Route::middleware(['auth'])->group(function () {
     Route::group([], function () {
 
         // Events
-        Route::get('/events', function () {
+        Route::get('/events', function (Request $request) {
             if (!auth()->user()->isAdmin())
                 abort(403, 'Admin access only.');
-            return app(EventController::class)->index();
+            return app(EventController::class)->index($request);
         })->name('events.index');
         Route::get('/events/create', function () {
             if (!auth()->user()->isAdmin())
                 abort(403, 'Admin access only.');
             return app(EventController::class)->create();
         })->name('events.create');
-        Route::post('/events', function (\Illuminate\Http\Request $request) {
+        Route::post('/events', function (Request $request) {
             if (!auth()->user()->isAdmin())
                 abort(403, 'Admin access only.');
             return app(EventController::class)->store($request);
@@ -119,7 +115,7 @@ Route::middleware(['auth'])->group(function () {
                 abort(403, 'Admin access only.');
             return app(EventController::class)->edit($event);
         })->name('events.edit');
-        Route::put('/events/{event}', function (\Illuminate\Http\Request $request, \App\Models\Event $event) {
+        Route::put('/events/{event}', function (Request $request, \App\Models\Event $event) {
             if (!auth()->user()->isAdmin())
                 abort(403, 'Admin access only.');
             return app(EventController::class)->update($request, $event);
@@ -129,8 +125,7 @@ Route::middleware(['auth'])->group(function () {
                 abort(403, 'Admin access only.');
             return app(EventController::class)->destroy($event);
         })->name('events.destroy');
-        Route::post('/events/{event}/confirm', function (\App\Models\Event $event, \Illuminate\Http\Request $request) {
-            // Waiters CAN confirm participation — this is the exception
+        Route::post('/events/{event}/confirm', function (\App\Models\Event $event, Request $request) {
             return app(EventController::class)->confirmParticipation($event, $request);
         })->name('events.confirm');
 
@@ -138,14 +133,14 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/waiters', function () {
             if (!auth()->user()->isAdmin())
                 abort(403, 'Admin access only.');
-            return app(WaiterController::class)->index();
+            return app(WaiterController::class)->index(request());
         })->name('waiters.index');
         Route::get('/waiters/create', function () {
             if (!auth()->user()->isAdmin())
                 abort(403, 'Admin access only.');
             return app(WaiterController::class)->create();
         })->name('waiters.create');
-        Route::post('/waiters', function (\Illuminate\Http\Request $request) {
+        Route::post('/waiters', function (Request $request) {
             if (!auth()->user()->isAdmin())
                 abort(403, 'Admin access only.');
             return app(WaiterController::class)->store($request);
@@ -160,7 +155,7 @@ Route::middleware(['auth'])->group(function () {
                 abort(403, 'Admin access only.');
             return app(WaiterController::class)->edit($waiter);
         })->name('waiters.edit');
-        Route::put('/waiters/{waiter}', function (\Illuminate\Http\Request $request, \App\Models\Waiter $waiter) {
+        Route::put('/waiters/{waiter}', function (Request $request, \App\Models\Waiter $waiter) {
             if (!auth()->user()->isAdmin())
                 abort(403, 'Admin access only.');
             return app(WaiterController::class)->update($request, $waiter);
@@ -172,20 +167,17 @@ Route::middleware(['auth'])->group(function () {
         })->name('waiters.destroy');
 
         // Equipment Categories
-        Route::resource('equipment-categories', EquipmentCategoryController::class)->missing(function () {
-            abort(404);
-        })->parameters([])->except([]); // We'll define manually for role check
-        Route::get('/equipment-categories', function () {
+        Route::get('/equipment-categories', function (Request $request) {
             if (!auth()->user()->isAdmin())
                 abort(403);
-            return app(EquipmentCategoryController::class)->index();
+            return app(EquipmentCategoryController::class)->index($request);
         })->name('equipment-categories.index');
         Route::get('/equipment-categories/create', function () {
             if (!auth()->user()->isAdmin())
                 abort(403);
             return app(EquipmentCategoryController::class)->create();
         })->name('equipment-categories.create');
-        Route::post('/equipment-categories', function (\Illuminate\Http\Request $request) {
+        Route::post('/equipment-categories', function (Request $request) {
             if (!auth()->user()->isAdmin())
                 abort(403);
             return app(EquipmentCategoryController::class)->store($request);
@@ -200,7 +192,7 @@ Route::middleware(['auth'])->group(function () {
                 abort(403);
             return app(EquipmentCategoryController::class)->edit($equipmentCategory);
         })->name('equipment-categories.edit');
-        Route::put('/equipment-categories/{equipmentCategory}', function (\Illuminate\Http\Request $request, \App\Models\EquipmentCategory $equipmentCategory) {
+        Route::put('/equipment-categories/{equipmentCategory}', function (Request $request, \App\Models\EquipmentCategory $equipmentCategory) {
             if (!auth()->user()->isAdmin())
                 abort(403);
             return app(EquipmentCategoryController::class)->update($request, $equipmentCategory);
@@ -212,17 +204,17 @@ Route::middleware(['auth'])->group(function () {
         })->name('equipment-categories.destroy');
 
         // Equipment Items
-        Route::get('/equipment-items', function () {
+        Route::get('/equipment-items', function (Request $request) {
             if (!auth()->user()->isAdmin())
                 abort(403);
-            return app(EquipmentItemController::class)->index();
+            return app(EquipmentItemController::class)->index($request);
         })->name('equipment-items.index');
         Route::get('/equipment-items/create', function () {
             if (!auth()->user()->isAdmin())
                 abort(403);
             return app(EquipmentItemController::class)->create();
         })->name('equipment-items.create');
-        Route::post('/equipment-items', function (\Illuminate\Http\Request $request) {
+        Route::post('/equipment-items', function (Request $request) {
             if (!auth()->user()->isAdmin())
                 abort(403);
             return app(EquipmentItemController::class)->store($request);
@@ -237,7 +229,7 @@ Route::middleware(['auth'])->group(function () {
                 abort(403);
             return app(EquipmentItemController::class)->edit($equipmentItem);
         })->name('equipment-items.edit');
-        Route::put('/equipment-items/{equipmentItem}', function (\Illuminate\Http\Request $request, \App\Models\EquipmentItem $equipmentItem) {
+        Route::put('/equipment-items/{equipmentItem}', function (Request $request, \App\Models\EquipmentItem $equipmentItem) {
             if (!auth()->user()->isAdmin())
                 abort(403);
             return app(EquipmentItemController::class)->update($request, $equipmentItem);
@@ -249,17 +241,17 @@ Route::middleware(['auth'])->group(function () {
         })->name('equipment-items.destroy');
 
         // Event Equipment Allocations
-        Route::get('/event-equipment', function () {
+        Route::get('/event-equipment', function (Request $request) {
             if (!auth()->user()->isAdmin())
                 abort(403);
-            return app(EventEquipmentController::class)->index();
+            return app(EventEquipmentController::class)->index($request);
         })->name('event-equipment.index');
         Route::get('/event-equipment/create', function () {
             if (!auth()->user()->isAdmin())
                 abort(403);
             return app(EventEquipmentController::class)->create();
         })->name('event-equipment.create');
-        Route::post('/event-equipment', function (\Illuminate\Http\Request $request) {
+        Route::post('/event-equipment', function (Request $request) {
             if (!auth()->user()->isAdmin())
                 abort(403);
             return app(EventEquipmentController::class)->store($request);
@@ -274,7 +266,7 @@ Route::middleware(['auth'])->group(function () {
                 abort(403);
             return app(EventEquipmentController::class)->edit($eventEquipment);
         })->name('event-equipment.edit');
-        Route::put('/event-equipment/{eventEquipment}', function (\Illuminate\Http\Request $request, \App\Models\EventEquipment $eventEquipment) {
+        Route::put('/event-equipment/{eventEquipment}', function (Request $request, \App\Models\EventEquipment $eventEquipment) {
             if (!auth()->user()->isAdmin())
                 abort(403);
             return app(EventEquipmentController::class)->update($request, $eventEquipment);
@@ -284,17 +276,17 @@ Route::middleware(['auth'])->group(function () {
                 abort(403);
             return app(EventEquipmentController::class)->destroy($eventEquipment);
         })->name('event-equipment.destroy');
-        Route::post('/event-equipment/{eventEquipment}/return', function (\Illuminate\Http\Request $request, \App\Models\EventEquipment $eventEquipment) {
+        Route::post('/event-equipment/{eventEquipment}/return', function (Request $request, \App\Models\EventEquipment $eventEquipment) {
             if (!auth()->user()->isAdmin())
                 abort(403);
             return app(EventEquipmentController::class)->returnEquipment($request, $eventEquipment);
         })->name('event-equipment.return');
 
         // Equipment Logs (admin view)
-        Route::get('/equipment-logs', function () {
+        Route::get('/equipment-logs', function (Request $request) {
             if (!auth()->user()->isAdmin())
                 abort(403);
-            return app(EquipmentLogController::class)->index();
+            return app(EquipmentLogController::class)->index($request);
         })->name('equipment-logs.index');
         Route::get('/equipment-logs/{equipmentLog}', function (\App\Models\EquipmentLog $equipmentLog) {
             if (!auth()->user()->isAdmin())
@@ -308,29 +300,29 @@ Route::middleware(['auth'])->group(function () {
                 abort(403);
             return app(ReportController::class)->index();
         })->name('reports.index');
-        Route::get('/reports/events', function (\Illuminate\Http\Request $request) {
+        Route::get('/reports/events', function (Request $request) {
             if (!auth()->user()->isAdmin())
                 abort(403);
             return app(ReportController::class)->events($request);
         })->name('reports.events');
-        Route::get('/reports/equipment', function (\Illuminate\Http\Request $request) {
+        Route::get('/reports/equipment', function (Request $request) {
             if (!auth()->user()->isAdmin())
                 abort(403);
             return app(ReportController::class)->equipmentUsage($request);
         })->name('reports.equipment');
-        Route::get('/reports/accountability', function (\Illuminate\Http\Request $request) {
+        Route::get('/reports/accountability', function (Request $request) {
             if (!auth()->user()->isAdmin())
                 abort(403);
             return app(ReportController::class)->accountability($request);
         })->name('reports.accountability');
-        Route::get('/reports/equipment-logs', function (\Illuminate\Http\Request $request) {
+        Route::get('/reports/equipment-logs', function (Request $request) {
             if (!auth()->user()->isAdmin())
                 abort(403);
             return app(ReportController::class)->equipmentLogs($request);
         })->name('reports.equipment-logs');
 
-        //Check-in and Check-out
-        Route::post('/events/{event}/waiters/{waiter}/time', function (\Illuminate\Http\Request $request, \App\Models\Event $event, \App\Models\Waiter $waiter) {
+        // Check-in and Check-out
+        Route::post('/events/{event}/waiters/{waiter}/time', function (Request $request, \App\Models\Event $event, \App\Models\Waiter $waiter) {
             if (!auth()->user()->isAdmin())
                 abort(403);
 
@@ -347,11 +339,7 @@ Route::middleware(['auth'])->group(function () {
             return back()->with('success', 'Attendance updated for ' . $waiter->user->name);
         })->name('events.waiter.time');
 
-
     });
-
-
-
 
 });
 

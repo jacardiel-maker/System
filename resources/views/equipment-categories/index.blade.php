@@ -18,6 +18,81 @@
         </a>
     </div>
 
+    {{-- Search & Filter Bar --}}
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 mb-6">
+        <form action="{{ route('equipment-categories.index') }}" method="GET" class="flex flex-col sm:flex-row gap-4 items-end">
+            
+            {{-- Search --}}
+            <div class="flex-1 w-full">
+                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Search</label>
+                <div class="relative">
+                    <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                    <input type="text" name="search" value="{{ request('search') }}" 
+                        placeholder="Search by name or code..." 
+                        class="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent">
+                </div>
+            </div>
+
+            {{-- Sort --}}
+            <div class="w-full sm:w-44">
+                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Sort By</label>
+                <select name="sort" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent bg-white">
+                    <option value="latest" {{ request('sort') === 'latest' ? 'selected' : '' }}>Latest First</option>
+                    <option value="name" {{ request('sort') === 'name' ? 'selected' : '' }}>Name (A-Z)</option>
+                    <option value="items" {{ request('sort') === 'items' ? 'selected' : '' }}>Most Items</option>
+                </select>
+            </div>
+
+            {{-- Buttons --}}
+            <div class="flex gap-2 w-full sm:w-auto">
+                <button type="submit" class="px-5 py-2.5 bg-amber-600 text-white rounded-xl text-sm font-semibold hover:bg-amber-700 transition flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                    </svg>
+                    Filter
+                </button>
+                <a href="{{ route('equipment-categories.index') }}" class="px-5 py-2.5 border border-slate-200 text-slate-600 rounded-xl text-sm font-semibold hover:bg-slate-50 transition flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                    Reset
+                </a>
+            </div>
+        </form>
+
+        {{-- Active Filters --}}
+        @if(request('search') || request('sort'))
+        <div class="mt-4 pt-4 border-t border-slate-100 flex flex-wrap items-center gap-2">
+            <span class="text-xs text-slate-400 font-medium">Active filters:</span>
+            @if(request('search'))
+                <span class="px-3 py-1 bg-amber-50 text-amber-700 rounded-full text-xs font-medium flex items-center gap-1">
+                    Search: "{{ request('search') }}"
+                    <a href="{{ route('equipment-categories.index', array_diff_key(request()->all(), ['search' => 1])) }}" class="hover:text-amber-900">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </a>
+                </span>
+            @endif
+            @if(request('sort'))
+                <span class="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium flex items-center gap-1">
+                    Sort: {{ ucfirst(request('sort')) }}
+                    <a href="{{ route('equipment-categories.index', array_diff_key(request()->all(), ['sort' => 1])) }}" class="hover:text-blue-900">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </a>
+                </span>
+            @endif
+        </div>
+        @endif
+    </div>
+
+    {{-- Results Count --}}
+    <div class="mb-4 flex items-center justify-between">
+        <p class="text-sm text-slate-500">
+            Showing <span class="font-semibold text-slate-700">{{ $categories->firstItem() ?? 0 }}–{{ $categories->lastItem() ?? 0 }}</span> of <span class="font-semibold text-slate-700">{{ $categories->total() }}</span> categories
+        </p>
+    </div>
+
     {{-- Categories Table --}}
     <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
         @if($categories->count() > 0)
@@ -100,12 +175,17 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
                     </svg>
                 </div>
-                <h3 class="text-sm font-semibold text-slate-900">No categories yet</h3>
-                <p class="mt-1 text-sm text-slate-500">Start by creating your first equipment category.</p>
-                <a href="{{ route('equipment-categories.create') }}" class="inline-flex items-center gap-1.5 mt-4 text-sm font-medium text-amber-700 hover:text-amber-800 transition-colors">
-                    Add a category
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-                </a>
+                <h3 class="text-sm font-semibold text-slate-900">No categories found</h3>
+                <p class="mt-1 text-sm text-slate-500">Try adjusting your search or add a new category.</p>
+                <div class="mt-4 flex justify-center gap-3">
+                    <a href="{{ route('equipment-categories.index') }}" class="text-sm font-medium text-slate-600 hover:text-slate-800 transition-colors">
+                        Clear filters
+                    </a>
+                    <span class="text-slate-300">|</span>
+                    <a href="{{ route('equipment-categories.create') }}" class="text-sm font-medium text-amber-700 hover:text-amber-800 transition-colors">
+                        Add a category
+                    </a>
+                </div>
             </div>
         @endif
     </div>
@@ -113,7 +193,7 @@
     {{-- Pagination --}}
     @if($categories->hasPages())
         <div class="mt-6">
-            {{ $categories->links() }}
+            {{ $categories->appends(request()->query())->links() }}
         </div>
     @endif
 </div>

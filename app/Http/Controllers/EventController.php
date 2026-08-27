@@ -12,9 +12,34 @@ use Illuminate\Support\Facades\Mail;
 
 class EventController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $events = Event::withCount('waiters', 'equipment')->latest()->paginate(10);
+        $query = Event::withCount('waiters', 'equipment');
+
+        // Search by event name or venue address
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('event_name', 'like', "%{$search}%")
+                    ->orWhere('venue_address', 'like', "%{$search}%");
+            });
+        }
+
+        // Filter by status
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        // Filter by date range
+        if ($request->filled('from')) {
+            $query->whereDate('event_date', '>=', $request->from);
+        }
+        if ($request->filled('to')) {
+            $query->whereDate('event_date', '<=', $request->to);
+        }
+
+        $events = $query->latest()->paginate(10)->withQueryString();
+
         return view('events.index', compact('events'));
     }
 
@@ -51,18 +76,19 @@ class EventController extends Controller
 
         if (!empty($validated['waiters'])) {
             foreach ($validated['waiters'] as $waiterData) {
-                if (!isset($waiterData['id'])) continue;
-                
+                if (!isset($waiterData['id']))
+                    continue;
+
                 $event->waiters()->attach($waiterData['id'], [
                     'role' => $waiterData['role'] ?? 'waiter',
                     'confirmation_status' => 'pending',
                 ]);
 
                 $waiter = Waiter::find($waiterData['id']);
-                
+
                 // Send via Notification (database + mail)
                 $waiter->user->notify(new EventAssignedNotification($event));
-                
+
                 // ALSO send direct Mailable for better Gmail formatting
                 try {
                     Mail::to($waiter->user->email)->send(new EventAssignmentMail($event, $waiter->user));
@@ -104,7 +130,7 @@ class EventController extends Controller
         ]);
 
         $oldDate = $event->event_date;
-        
+
         $event->update([
             'event_name' => $validated['event_name'],
             'venue_address' => $validated['venue_address'],
@@ -119,18 +145,19 @@ class EventController extends Controller
         $event->waiters()->detach();
         if (!empty($validated['waiters'])) {
             foreach ($validated['waiters'] as $waiterData) {
-                if (!isset($waiterData['id'])) continue;
-                
+                if (!isset($waiterData['id']))
+                    continue;
+
                 $event->waiters()->attach($waiterData['id'], [
                     'role' => $waiterData['role'] ?? 'waiter',
                     'confirmation_status' => 'pending',
                 ]);
 
                 $waiter = Waiter::find($waiterData['id']);
-                
+
                 // Send notification
                 $waiter->user->notify(new EventAssignedNotification($event));
-                
+
                 // Send direct email
                 try {
                     Mail::to($waiter->user->email)->send(new EventAssignmentMail($event, $waiter->user));

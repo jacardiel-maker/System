@@ -8,9 +8,47 @@ use Illuminate\Http\Request;
 
 class EquipmentItemController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $items = EquipmentItem::with('category')->latest()->paginate(10);
+        $query = EquipmentItem::with('category');
+
+        // Search by item name or serial code
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('serial_code', 'like', "%{$search}%");
+            });
+        }
+
+        // Filter by category
+        if ($request->filled('category')) {
+            $query->where('category_id', $request->category);
+        }
+
+        // Filter by condition
+        if ($request->filled('condition')) {
+            $query->where('condition', $request->condition);
+        }
+
+        // Filter by stock level
+        if ($request->filled('stock')) {
+            switch ($request->stock) {
+                case 'low':
+                    $query->whereColumn('available_quantity', '<=', \DB::raw('total_quantity * 0.2'))
+                        ->where('available_quantity', '>', 0);
+                    break;
+                case 'out':
+                    $query->where('available_quantity', 0);
+                    break;
+                case 'available':
+                    $query->where('available_quantity', '>', 0);
+                    break;
+            }
+        }
+
+        $items = $query->latest()->paginate(10)->withQueryString();
+
         return view('equipment-items.index', compact('items'));
     }
 
@@ -61,7 +99,7 @@ class EquipmentItemController extends Controller
         ]);
 
         $diff = $validated['total_quantity'] - $equipmentItem->total_quantity;
-        
+
         $equipmentItem->update([
             ...$validated,
             'available_quantity' => $equipmentItem->available_quantity + $diff,

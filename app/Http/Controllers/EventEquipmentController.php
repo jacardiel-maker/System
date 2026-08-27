@@ -11,9 +11,50 @@ use Illuminate\Http\Request;
 
 class EventEquipmentController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $allocations = EventEquipment::with(['event', 'equipmentItem', 'assignedWaiter.user'])->latest()->paginate(15);
+        $query = EventEquipment::with(['event', 'equipmentItem', 'assignedWaiter.user']);
+
+        // Search: event name, equipment name, or waiter name
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->whereHas('event', function ($eq) use ($search) {
+                    $eq->where('event_name', 'like', "%{$search}%");
+                })
+                    ->orWhereHas('equipmentItem', function ($eq) use ($search) {
+                        $eq->where('name', 'like', "%{$search}%");
+                    })
+                    ->orWhereHas('assignedWaiter.user', function ($eq) use ($search) {
+                        $eq->where('name', 'like', "%{$search}%");
+                    });
+            });
+        }
+
+        // Filter by status
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        // Filter by assigned waiter
+        if ($request->filled('waiter_id')) {
+            $query->where('assigned_waiter_id', $request->waiter_id);
+        }
+
+        // Filter by event date range
+        if ($request->filled('from')) {
+            $query->whereHas('event', function ($q) use ($request) {
+                $q->whereDate('event_date', '>=', $request->from);
+            });
+        }
+        if ($request->filled('to')) {
+            $query->whereHas('event', function ($q) use ($request) {
+                $q->whereDate('event_date', '<=', $request->to);
+            });
+        }
+
+        $allocations = $query->latest()->paginate(15)->withQueryString();
+
         return view('event-equipment.index', compact('allocations'));
     }
 

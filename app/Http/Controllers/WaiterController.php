@@ -13,9 +13,34 @@ use Illuminate\Support\Facades\Hash;
 
 class WaiterController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $waiters = Waiter::with('user')->latest()->paginate(10);
+        $query = Waiter::with('user');
+
+        // Search by name, email, or phone
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->whereHas('user', function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%");
+            })->orWhere('phone', 'like', "%{$search}%");
+        }
+
+        // Filter by status
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        // Filter by hire date range
+        if ($request->filled('from')) {
+            $query->whereDate('date_hired', '>=', $request->from);
+        }
+        if ($request->filled('to')) {
+            $query->whereDate('date_hired', '<=', $request->to);
+        }
+
+        $waiters = $query->latest()->paginate(10)->withQueryString();
+
         return view('waiters.index', compact('waiters'));
     }
 

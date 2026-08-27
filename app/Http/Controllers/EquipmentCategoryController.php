@@ -7,9 +7,36 @@ use Illuminate\Http\Request;
 
 class EquipmentCategoryController extends Controller
 {
-    public function index()
+        public function index(Request $request)
     {
-        $categories = EquipmentCategory::withCount('items')->latest()->paginate(10);
+        $query = EquipmentCategory::withCount('items');
+
+        // Search by name or code
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('code', 'like', "%{$search}%");
+            });
+        }
+
+        // Sort options
+        $sort = $request->get('sort', 'latest');
+        switch ($sort) {
+            case 'name':
+                $query->orderBy('name', 'asc');
+                break;
+            case 'items':
+                $query->orderBy('items_count', 'desc');
+                break;
+            case 'latest':
+            default:
+                $query->latest();
+                break;
+        }
+
+        $categories = $query->paginate(10)->withQueryString();
+
         return view('equipment-categories.index', compact('categories'));
     }
 
