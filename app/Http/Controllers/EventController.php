@@ -183,16 +183,46 @@ class EventController extends Controller
         return redirect()->route('events.index')->with('success', 'Event deleted.');
     }
 
-    public function confirmParticipation(Event $event, Request $request)
+        public function confirmParticipation(Event $event, Request $request)
     {
         $waiter = auth()->user()->waiter;
-        $status = $request->input('status');
+        if (!$waiter) {
+            return back()->with('error', 'You are not registered as a waiter.');
+        }
 
+        $status = $request->input('status');
+        if (!in_array($status, ['confirmed', 'declined'])) {
+            return back()->with('error', 'Invalid status.');
+        }
+
+        // Update the pivot
         $event->waiters()->updateExistingPivot($waiter->id, [
             'confirmation_status' => $status,
             'confirmed_at' => $status === 'confirmed' ? now() : null,
         ]);
 
-        return back()->with('success', 'Participation ' . $status . '.');
+        // If confirmed, notify the admin who created the event
+        if ($status === 'confirmed') {
+            // Reload to get the pivot data with role
+            $event->load(['waiters' => function ($q) use ($waiter) {
+                $q->where('waiter_id', $waiter->id);
+            }]);
+
+            $waiterWithPivot = $event->waiters->first();
+            if ($waiterWithPivot) {
+                $waiter->setRelation('pivot', $waiterWithPivot->pivot);
+            }
+
+            $admin = $event->creator;
+            if ($admin) {
+                $admin->notify(new \App\Notifications\WaiterConfirmedNotification($event, $waiter));
+            }
+        }
+
+        $message = $status === 'confirmed' 
+            ? 'Participation confirmed successfully! Admin has been notified.' 
+            : 'Participation declined.';
+
+        return back()->with('success', $message);
     }
 }

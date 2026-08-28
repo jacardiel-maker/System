@@ -22,8 +22,29 @@
     <div class="bg-white rounded-lg shadow divide-y">
         @forelse($notifications as $notification)
             <div class="p-4 flex items-center justify-between {{ $notification->read_at ? 'bg-white' : 'bg-blue-50' }}">
-                <div class="flex-1">
-                    <a href="{{ route('notifications.show', $notification->id) }}" class="block">
+                <div class="flex-1 flex items-start gap-3">
+                    {{-- Icon based on type --}}
+                    <div class="mt-1">
+                        @if(($notification->data['type'] ?? '') === 'waiter_confirmed')
+                            <span class="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center">
+                                <i class="fas fa-check-circle text-sm"></i>
+                            </span>
+                        @elseif(($notification->data['title'] ?? '') === 'New Event Assignment')
+                            <span class="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center">
+                                <i class="fas fa-calendar-check text-sm"></i>
+                            </span>
+                        @elseif(($notification->data['type'] ?? '') === 'update')
+                            <span class="w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center">
+                                <i class="fas fa-edit text-sm"></i>
+                            </span>
+                        @else
+                            <span class="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center">
+                                <i class="fas fa-bell text-sm"></i>
+                            </span>
+                        @endif
+                    </div>
+
+                    <a href="{{ route('notifications.show', $notification->id) }}" class="block flex-1">
                         <div class="font-medium {{ $notification->read_at ? 'text-gray-700' : 'text-blue-900' }}">
                             {{ $notification->data['title'] ?? 'Notification' }}
                         </div>

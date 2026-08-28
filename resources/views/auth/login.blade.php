@@ -6,7 +6,7 @@
 
         <div class="mb-6">
             <x-input-label for="email" :value="__('Email Address')" class="text-sm font-semibold text-slate-700 mb-2 block" />
-            <x-text-input id="email" class="input-modern block w-full rounded-xl px-4 py-3 text-sm bg-slate-50" type="email" name="email" :value="old('email')" required autofocus autocomplete="username" placeholder="admin@stephscatering.com" />
+            <x-text-input id="email" class="input-modern block w-full rounded-xl px-4 py-3 text-sm bg-slate-50" type="email" name="email" :value="old('email')" required autofocus autocomplete="username" placeholder="Email" />
             <x-input-error :messages="$errors->get('email')" class="mt-2 text-sm text-red-500" />
         </div>
 
