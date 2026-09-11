@@ -99,6 +99,167 @@
             </div>
         </div>
 
+        {{-- MODERN GANTT CHART --}}
+        @php
+            $ganttDays = 14;
+            $ganttStart = now()->startOfDay();
+            $ganttEnd = now()->copy()->addDays($ganttDays)->endOfDay();
+            
+            if(auth()->user()->isAdmin()) {
+                $ganttEvents = \App\Models\Event::where('event_date', '>=', $ganttStart)
+                    ->where('setup_time', '<=', $ganttEnd)
+                    ->orderBy('setup_time')
+                    ->get();
+            } else {
+                $waiter = auth()->user()->waiter;
+                $ganttEvents = $waiter ? $waiter->events()
+                    ->where('event_date', '>=', $ganttStart)
+                    ->where('setup_time', '<=', $ganttEnd)
+                    ->orderBy('setup_time')
+                    ->get() : collect();
+            }
+        @endphp
+
+        @if($ganttEvents->count() > 0)
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 mb-8">
+            {{-- Header --}}
+            <div class="flex items-center justify-between mb-6">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-900">Event Timeline</h2>
+                    <p class="text-sm text-slate-500 mt-0.5">{{ $ganttStart->format('M d') }} — {{ $ganttEnd->format('M d, Y') }}</p>
+                </div>
+                <div class="flex items-center gap-4 text-xs">
+                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span> Scheduled</span>
+                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-purple-500"></span> Ongoing</span>
+                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Completed</span>
+                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> Today</span>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto pb-2">
+                <div class="min-w-[900px]">
+                    
+                    {{-- Date Header --}}
+                    <div class="flex items-end mb-4">
+                        <div class="w-48 flex-shrink-0 pb-2">
+                            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Events</span>
+                        </div>
+                        <div class="flex-1 relative">
+                            <div class="grid" style="grid-template-columns: repeat({{ $ganttDays }}, 1fr);">
+                                @for($i = 0; $i < $ganttDays; $i++)
+                                    @php $day = $ganttStart->copy()->addDays($i); @endphp
+                                    <div class="text-center pb-2 {{ $day->isToday() ? 'relative' : '' }}">
+                                        @if($day->isToday())
+                                            <div class="absolute -top-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-amber-500 rounded-full"></div>
+                                        @endif
+                                        <div class="text-[10px] font-medium {{ $day->isToday() ? 'text-amber-600' : 'text-slate-400' }} uppercase">{{ $day->format('D') }}</div>
+                                        <div class="text-sm font-bold {{ $day->isToday() ? 'text-amber-700 bg-amber-50 w-8 h-8 mx-auto rounded-full flex items-center justify-center mt-0.5' : 'text-slate-600 mt-0.5' }}">{{ $day->format('d') }}</div>
+                                    </div>
+                                @endfor
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- Divider --}}
+                    <div class="h-px bg-slate-100 mb-4"></div>
+
+                    {{-- Event Rows --}}
+                    <div class="space-y-3">
+                        @foreach($ganttEvents as $event)
+                            @php
+                                $setup = $event->setup_time->copy();
+                                $eventDate = $event->event_date->copy();
+                                
+                                $barStart = $setup->lt($ganttStart) ? $ganttStart : $setup;
+                                $barEnd = $eventDate->gt($ganttEnd) ? $ganttEnd : $eventDate;
+                                
+                                $startOffset = $ganttStart->diffInDays($barStart);
+                                $duration = max(0.3, $barStart->diffInDays($barEnd));
+                                
+                                $leftPct = ($startOffset / $ganttDays) * 100;
+                                $widthPct = ($duration / $ganttDays) * 100;
+                                
+                                $statusConfig = [
+                                    'scheduled' => ['bg-gradient-to-r from-blue-500 to-blue-400', 'shadow-blue-500/25', 'bg-blue-50 text-blue-700'],
+                                    'ongoing' => ['bg-gradient-to-r from-purple-500 to-purple-400', 'shadow-purple-500/25', 'bg-purple-50 text-purple-700'],
+                                    'completed' => ['bg-gradient-to-r from-emerald-500 to-emerald-400', 'shadow-emerald-500/25', 'bg-emerald-50 text-emerald-700'],
+                                    'cancelled' => ['bg-gradient-to-r from-slate-400 to-slate-300', 'shadow-slate-400/25', 'bg-slate-100 text-slate-600'],
+                                ];
+                                $config = $statusConfig[$event->status] ?? $statusConfig['scheduled'];
+                            @endphp
+                            
+                            <div class="flex items-center group">
+                                {{-- Event Info --}}
+                                <div class="w-48 flex-shrink-0 pr-4">
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-1.5 h-1.5 rounded-full {{ explode(' ', $config[2])[0] }}"></div>
+                                        <div class="text-sm font-semibold text-slate-700 truncate" title="{{ $event->event_name }}">{{ $event->event_name }}</div>
+                                    </div>
+                                    <div class="text-[11px] text-slate-400 mt-0.5 ml-3.5">
+                                        {{ $event->setup_time->format('h:i A') }} – {{ $event->event_date->format('h:i A') }}
+                                    </div>
+                                </div>
+                                
+                                {{-- Timeline Track --}}
+                                <div class="flex-1 relative h-12">
+                                    {{-- Background grid --}}
+                                    <div class="absolute inset-0 grid rounded-xl overflow-hidden bg-slate-50/50" style="grid-template-columns: repeat({{ $ganttDays }}, 1fr);">
+                                        @for($i = 0; $i < $ganttDays; $i++)
+                                            @php $day = $ganttStart->copy()->addDays($i); @endphp
+                                            <div class="border-r border-slate-100/80 last:border-r-0 {{ $day->isToday() ? 'bg-amber-50/30' : '' }}"></div>
+                                        @endfor
+                                    </div>
+                                    
+                                    {{-- Today marker line --}}
+                                    @php $todayOffset = $ganttStart->diffInDays(now()->startOfDay()); @endphp
+                                    @if($todayOffset >= 0 && $todayOffset < $ganttDays)
+                                        <div class="absolute top-0 bottom-0 w-0.5 bg-amber-400/60 z-10" style="left: {{ (($todayOffset + 0.5) / $ganttDays) * 100 }}%">
+                                            <div class="absolute -top-1 -translate-x-1/2">
+                                                <div class="w-2 h-2 bg-amber-500 rounded-full ring-2 ring-amber-100"></div>
+                                            </div>
+                                        </div>
+                                    @endif
+                                    
+                                    {{-- Event Bar --}}
+                                    <a href="{{ auth()->user()->isAdmin() ? route('events.show', $event) : route('waiters.my-event', $event) }}" 
+                                    class="absolute top-1/2 -translate-y-1/2 h-7 rounded-full {{ $config[0] }} text-white text-[11px] font-semibold flex items-center px-3 shadow-lg {{ $config[1] }} whitespace-nowrap overflow-hidden transition-all duration-300 hover:scale-[1.02] hover:shadow-xl cursor-pointer"
+                                    style="left: {{ $leftPct }}%; width: {{ max(4, min($widthPct, 100 - $leftPct - 1)) }}%;"
+                                    title="{{ $event->event_name }} | {{ $event->setup_time->format('M d, h:i A') }} – {{ $event->event_date->format('M d, h:i A') }}">
+                                        @if($widthPct > 10)
+                                            <span class="truncate">{{ $event->event_date->format('M d') }}</span>
+                                            @if($widthPct > 20)
+                                                <span class="ml-1 opacity-80">{{ $event->event_date->format('h:i A') }}</span>
+                                            @endif
+                                        @endif
+                                    </a>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+
+                    {{-- Bottom Month Labels --}}
+                    <div class="flex mt-4 pt-3 border-t border-slate-100">
+                        <div class="w-48 flex-shrink-0"></div>
+                        <div class="flex-1 grid" style="grid-template-columns: repeat({{ $ganttDays }}, 1fr);">
+                            @php $currentMonth = ''; @endphp
+                            @for($i = 0; $i < $ganttDays; $i++)
+                                @php 
+                                    $day = $ganttStart->copy()->addDays($i);
+                                    $monthLabel = $day->format('M');
+                                    $showLabel = $monthLabel !== $currentMonth;
+                                    $currentMonth = $monthLabel;
+                                @endphp
+                                <div class="text-center text-[10px] font-medium {{ $day->isToday() ? 'text-amber-600' : 'text-slate-400' }} {{ $showLabel ? '' : 'opacity-0' }}">
+                                    {{ $showLabel ? $monthLabel : '' }}
+                                </div>
+                            @endfor
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        @endif
+        
         {{-- ANALYTICS CHARTS ROW --}}
         @php
             $eventsByMonth = \App\Models\Event::select(
@@ -351,6 +512,8 @@
                 </div>
             </div>
 
+            
+
             <div class="space-y-6">
                 {{-- Quick Actions --}}
                 <div class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 text-white shadow-lg">
@@ -395,6 +558,7 @@
                 </div>
             </div>
         </div>
+        
 
     @else
         {{-- WAITER DASHBOARD --}}
@@ -523,6 +687,166 @@
                     }
                 });
             </script>
+            {{-- MODERN GANTT CHART --}}
+            @php
+                $ganttDays = 14;
+                $ganttStart = now()->startOfDay();
+                $ganttEnd = now()->copy()->addDays($ganttDays)->endOfDay();
+                
+                if(auth()->user()->isAdmin()) {
+                    $ganttEvents = \App\Models\Event::where('event_date', '>=', $ganttStart)
+                        ->where('setup_time', '<=', $ganttEnd)
+                        ->orderBy('setup_time')
+                        ->get();
+                } else {
+                    $waiter = auth()->user()->waiter;
+                    $ganttEvents = $waiter ? $waiter->events()
+                        ->where('event_date', '>=', $ganttStart)
+                        ->where('setup_time', '<=', $ganttEnd)
+                        ->orderBy('setup_time')
+                        ->get() : collect();
+                }
+            @endphp
+
+            @if($ganttEvents->count() > 0)
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 mb-8">
+                {{-- Header --}}
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-900">Event Timeline</h2>
+                        <p class="text-sm text-slate-500 mt-0.5">{{ $ganttStart->format('M d') }} — {{ $ganttEnd->format('M d, Y') }}</p>
+                    </div>
+                    <div class="flex items-center gap-4 text-xs">
+                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span> Scheduled</span>
+                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-purple-500"></span> Ongoing</span>
+                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Completed</span>
+                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> Today</span>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto pb-2">
+                    <div class="min-w-[900px]">
+                        
+                        {{-- Date Header --}}
+                        <div class="flex items-end mb-4">
+                            <div class="w-48 flex-shrink-0 pb-2">
+                                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Events</span>
+                            </div>
+                            <div class="flex-1 relative">
+                                <div class="grid" style="grid-template-columns: repeat({{ $ganttDays }}, 1fr);">
+                                    @for($i = 0; $i < $ganttDays; $i++)
+                                        @php $day = $ganttStart->copy()->addDays($i); @endphp
+                                        <div class="text-center pb-2 {{ $day->isToday() ? 'relative' : '' }}">
+                                            @if($day->isToday())
+                                                <div class="absolute -top-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-amber-500 rounded-full"></div>
+                                            @endif
+                                            <div class="text-[10px] font-medium {{ $day->isToday() ? 'text-amber-600' : 'text-slate-400' }} uppercase">{{ $day->format('D') }}</div>
+                                            <div class="text-sm font-bold {{ $day->isToday() ? 'text-amber-700 bg-amber-50 w-8 h-8 mx-auto rounded-full flex items-center justify-center mt-0.5' : 'text-slate-600 mt-0.5' }}">{{ $day->format('d') }}</div>
+                                        </div>
+                                    @endfor
+                                </div>
+                            </div>
+                        </div>
+
+                        {{-- Divider --}}
+                        <div class="h-px bg-slate-100 mb-4"></div>
+
+                        {{-- Event Rows --}}
+                        <div class="space-y-3">
+                            @foreach($ganttEvents as $event)
+                                @php
+                                    $setup = $event->setup_time->copy();
+                                    $eventDate = $event->event_date->copy();
+                                    
+                                    $barStart = $setup->lt($ganttStart) ? $ganttStart : $setup;
+                                    $barEnd = $eventDate->gt($ganttEnd) ? $ganttEnd : $eventDate;
+                                    
+                                    $startOffset = $ganttStart->diffInDays($barStart);
+                                    $duration = max(0.3, $barStart->diffInDays($barEnd));
+                                    
+                                    $leftPct = ($startOffset / $ganttDays) * 100;
+                                    $widthPct = ($duration / $ganttDays) * 100;
+                                    
+                                    $statusConfig = [
+                                        'scheduled' => ['bg-gradient-to-r from-blue-500 to-blue-400', 'shadow-blue-500/25', 'bg-blue-50 text-blue-700'],
+                                        'ongoing' => ['bg-gradient-to-r from-purple-500 to-purple-400', 'shadow-purple-500/25', 'bg-purple-50 text-purple-700'],
+                                        'completed' => ['bg-gradient-to-r from-emerald-500 to-emerald-400', 'shadow-emerald-500/25', 'bg-emerald-50 text-emerald-700'],
+                                        'cancelled' => ['bg-gradient-to-r from-slate-400 to-slate-300', 'shadow-slate-400/25', 'bg-slate-100 text-slate-600'],
+                                    ];
+                                    $config = $statusConfig[$event->status] ?? $statusConfig['scheduled'];
+                                @endphp
+                                
+                                <div class="flex items-center group">
+                                    {{-- Event Info --}}
+                                    <div class="w-48 flex-shrink-0 pr-4">
+                                        <div class="flex items-center gap-2">
+                                            <div class="w-1.5 h-1.5 rounded-full {{ explode(' ', $config[2])[0] }}"></div>
+                                            <div class="text-sm font-semibold text-slate-700 truncate" title="{{ $event->event_name }}">{{ $event->event_name }}</div>
+                                        </div>
+                                        <div class="text-[11px] text-slate-400 mt-0.5 ml-3.5">
+                                            {{ $event->setup_time->format('h:i A') }} – {{ $event->event_date->format('h:i A') }}
+                                        </div>
+                                    </div>
+                                    
+                                    {{-- Timeline Track --}}
+                                    <div class="flex-1 relative h-12">
+                                        {{-- Background grid --}}
+                                        <div class="absolute inset-0 grid rounded-xl overflow-hidden bg-slate-50/50" style="grid-template-columns: repeat({{ $ganttDays }}, 1fr);">
+                                            @for($i = 0; $i < $ganttDays; $i++)
+                                                @php $day = $ganttStart->copy()->addDays($i); @endphp
+                                                <div class="border-r border-slate-100/80 last:border-r-0 {{ $day->isToday() ? 'bg-amber-50/30' : '' }}"></div>
+                                            @endfor
+                                        </div>
+                                        
+                                        {{-- Today marker line --}}
+                                        @php $todayOffset = $ganttStart->diffInDays(now()->startOfDay()); @endphp
+                                        @if($todayOffset >= 0 && $todayOffset < $ganttDays)
+                                            <div class="absolute top-0 bottom-0 w-0.5 bg-amber-400/60 z-10" style="left: {{ (($todayOffset + 0.5) / $ganttDays) * 100 }}%">
+                                                <div class="absolute -top-1 -translate-x-1/2">
+                                                    <div class="w-2 h-2 bg-amber-500 rounded-full ring-2 ring-amber-100"></div>
+                                                </div>
+                                            </div>
+                                        @endif
+                                        
+                                        {{-- Event Bar --}}
+                                        <a href="{{ auth()->user()->isAdmin() ? route('events.show', $event) : route('waiters.my-event', $event) }}" 
+                                        class="absolute top-1/2 -translate-y-1/2 h-7 rounded-full {{ $config[0] }} text-white text-[11px] font-semibold flex items-center px-3 shadow-lg {{ $config[1] }} whitespace-nowrap overflow-hidden transition-all duration-300 hover:scale-[1.02] hover:shadow-xl cursor-pointer"
+                                        style="left: {{ $leftPct }}%; width: {{ max(4, min($widthPct, 100 - $leftPct - 1)) }}%;"
+                                        title="{{ $event->event_name }} | {{ $event->setup_time->format('M d, h:i A') }} – {{ $event->event_date->format('M d, h:i A') }}">
+                                            @if($widthPct > 10)
+                                                <span class="truncate">{{ $event->event_date->format('M d') }}</span>
+                                                @if($widthPct > 20)
+                                                    <span class="ml-1 opacity-80">{{ $event->event_date->format('h:i A') }}</span>
+                                                @endif
+                                            @endif
+                                        </a>
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+
+                        {{-- Bottom Month Labels --}}
+                        <div class="flex mt-4 pt-3 border-t border-slate-100">
+                            <div class="w-48 flex-shrink-0"></div>
+                            <div class="flex-1 grid" style="grid-template-columns: repeat({{ $ganttDays }}, 1fr);">
+                                @php $currentMonth = ''; @endphp
+                                @for($i = 0; $i < $ganttDays; $i++)
+                                    @php 
+                                        $day = $ganttStart->copy()->addDays($i);
+                                        $monthLabel = $day->format('M');
+                                        $showLabel = $monthLabel !== $currentMonth;
+                                        $currentMonth = $monthLabel;
+                                    @endphp
+                                    <div class="text-center text-[10px] font-medium {{ $day->isToday() ? 'text-amber-600' : 'text-slate-400' }} {{ $showLabel ? '' : 'opacity-0' }}">
+                                        {{ $showLabel ? $monthLabel : '' }}
+                                    </div>
+                                @endfor
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            @endif
 
             @if($pendingConfirmations->count() > 0)
                 <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mb-6">
@@ -543,36 +867,70 @@
                                     <div class="text-sm text-slate-500">{{ $event->event_date->format('M d, Y h:i A') }}</div>
                                 </div>
                                 <div class="flex gap-2">
-                                    <form action="{{ route('events.confirm', $event) }}" method="POST">
-                                        @csrf
-                                        <input type="hidden" name="status" value="confirmed">
-                                        <button
-                                            class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors">
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                    d="M5 13l4 4L19 7" />
-                                            </svg>
-                                            Confirm
-                                        </button>
-                                    </form>
-                                    <form action="{{ route('events.confirm', $event) }}" method="POST">
-                                        @csrf
-                                        <input type="hidden" name="status" value="declined">
-                                        <button
-                                            class="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 transition-colors">
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                    d="M6 18L18 6M6 6l12 12" />
-                                            </svg>
-                                            Decline
-                                        </button>
-                                    </form>
+                                    <button type="button"
+                                        onclick="openConfirmDialog({{ $event->id }}, {{ json_encode($event->event_name) }}, 'confirmed')"
+                                        class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        Confirm
+                                    </button>
+                                    <button type="button"
+                                        onclick="openConfirmDialog({{ $event->id }}, {{ json_encode($event->event_name) }}, 'declined')"
+                                        class="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 transition-colors">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                        Decline
+                                    </button>
                                 </div>
                             </div>
                         @endforeach
                     </div>
                 </div>
             @endif
+
+            {{-- Hidden Forms for Dialog Submission --}}
+            @foreach($pendingConfirmations as $event)
+            <form id="confirm-form-{{ $event->id }}" action="{{ route('events.confirm', $event) }}" method="POST" class="hidden">
+                @csrf
+                <input type="hidden" name="status" value="confirmed">
+            </form>
+            <form id="decline-form-{{ $event->id }}" action="{{ route('events.confirm', $event) }}" method="POST" class="hidden">
+                @csrf   
+                <input type="hidden" name="status" value="declined">
+            </form>
+            @endforeach
+
+            {{-- Confirmation Dialog Modal --}}
+            <div id="confirmModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div class="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md mx-4 transform transition-all">
+                    <div class="text-center mb-6">
+                        <div id="modalIcon" class="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center text-3xl">
+                            <!-- Icon injected by JS -->
+                        </div>
+                        <h3 id="modalTitle" class="text-xl font-bold text-gray-900 mb-2">Are you sure?</h3>
+                        <p id="modalMessage" class="text-gray-500 text-sm">Please confirm your action.</p>
+                    </div>
+                    
+                    <div class="bg-gray-50 rounded-xl p-4 mb-6">
+                        <div class="text-sm text-gray-500 mb-1">Event</div>
+                        <div id="modalEventName" class="font-semibold text-gray-800 text-lg"></div>
+                        <div id="modalActionText" class="text-sm mt-2 font-medium"></div>
+                    </div>
+
+                    <div class="flex gap-3">
+                        <button onclick="closeConfirmDialog()" class="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-medium transition">
+                            Cancel
+                        </button>
+                        <button id="modalConfirmBtn" class="flex-1 px-4 py-2.5 text-white rounded-xl font-medium transition">
+                            Yes, I'm Sure
+                        </button>
+                    </div>
+                </div>
+            </div>
 
             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                 <div class="px-6 py-5 border-b border-slate-100 flex justify-between items-center">
@@ -655,5 +1013,65 @@
         }
         updateClock();
         setInterval(updateClock, 1000);
+
+        let currentFormId = null;
+
+        function openConfirmDialog(eventId, eventName, action) {
+            const modal = document.getElementById('confirmModal');
+            const eventNameEl = document.getElementById('modalEventName');
+            const actionTextEl = document.getElementById('modalActionText');
+            const iconEl = document.getElementById('modalIcon');
+            const titleEl = document.getElementById('modalTitle');
+            const messageEl = document.getElementById('modalMessage');
+            const confirmBtn = document.getElementById('modalConfirmBtn');
+
+            eventNameEl.textContent = eventName;
+            currentFormId = (action === 'confirmed' ? 'confirm-form-' : 'decline-form-') + eventId;
+
+                        if (action === 'confirmed') {
+                iconEl.className = 'w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center bg-green-100 text-green-600';
+                iconEl.innerHTML = '<svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>';
+                titleEl.textContent = 'Confirm Participation?';
+                messageEl.textContent = 'You are about to confirm your attendance for this event.';
+                actionTextEl.textContent = 'Action: CONFIRM participation';
+                actionTextEl.className = 'text-sm mt-2 font-medium text-green-600';
+                confirmBtn.className = 'flex-1 px-4 py-2.5 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition';
+            } else {
+                iconEl.className = 'w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center bg-red-100 text-red-600';
+                iconEl.innerHTML = '<svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>';
+                titleEl.textContent = 'Decline Participation?';
+                messageEl.textContent = 'You are about to decline your attendance for this event.';
+                actionTextEl.textContent = 'Action: DECLINE participation';
+                actionTextEl.className = 'text-sm mt-2 font-medium text-red-600';
+                confirmBtn.className = 'flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition';
+            }
+
+            modal.classList.remove('hidden');
+        }
+
+        function closeConfirmDialog() {
+            document.getElementById('confirmModal').classList.add('hidden');
+            currentFormId = null;
+        }
+
+        document.getElementById('modalConfirmBtn').addEventListener('click', function() {
+            if (currentFormId) {
+                document.getElementById(currentFormId).submit();
+            }
+        });
+
+        // Close modal on backdrop click
+        document.getElementById('confirmModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeConfirmDialog();
+            }
+        });
+
+        // Close on Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeConfirmDialog();
+            }
+        });
     </script>
 @endsection

@@ -183,7 +183,7 @@ class EventController extends Controller
         return redirect()->route('events.index')->with('success', 'Event deleted.');
     }
 
-        public function confirmParticipation(Event $event, Request $request)
+    public function confirmParticipation(Event $event, Request $request)
     {
         $waiter = auth()->user()->waiter;
         if (!$waiter) {
@@ -201,27 +201,25 @@ class EventController extends Controller
             'confirmed_at' => $status === 'confirmed' ? now() : null,
         ]);
 
-        // If confirmed, notify the admin who created the event
+        // Notify admin when CONFIRMED
         if ($status === 'confirmed') {
-            // Reload to get the pivot data with role
-            $event->load(['waiters' => function ($q) use ($waiter) {
-                $q->where('waiter_id', $waiter->id);
-            }]);
-
-            $waiterWithPivot = $event->waiters->first();
-            if ($waiterWithPivot) {
-                $waiter->setRelation('pivot', $waiterWithPivot->pivot);
-            }
-
             $admin = $event->creator;
             if ($admin) {
                 $admin->notify(new \App\Notifications\WaiterConfirmedNotification($event, $waiter));
             }
         }
 
-        $message = $status === 'confirmed' 
-            ? 'Participation confirmed successfully! Admin has been notified.' 
-            : 'Participation declined.';
+        // Notify admin only when DECLINED
+        if ($status === 'declined') {
+            $admin = $event->creator;
+            if ($admin) {
+                $admin->notify(new \App\Notifications\EventDeclinedNotification($event, $waiter));
+            }
+        }
+
+        $message = $status === 'confirmed'
+            ? 'Participation confirmed successfully.'
+            : 'Participation declined. Admin has been notified.';
 
         return back()->with('success', $message);
     }
