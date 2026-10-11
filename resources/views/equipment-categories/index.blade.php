@@ -110,9 +110,14 @@
                         <tr class="group hover:bg-slate-50/50 transition">
                             <td class="px-4 py-2">
                                 <div class="flex items-center gap-2.5">
-                                    <div class="w-7 h-7 shrink-0 rounded-md bg-amber-50 flex items-center justify-center text-amber-600">
-                                        <i class="fas fa-tag text-xs"></i>
-                                    </div>
+                                    @if($category->image)
+                                        <img src="{{ asset('storage/' . $category->image) }}" alt="{{ $category->name }}"
+                                            class="w-8 h-8 shrink-0 rounded-md object-cover bg-slate-100">
+                                    @else
+                                        <div class="w-8 h-8 shrink-0 rounded-md bg-amber-50 flex items-center justify-center text-amber-600">
+                                            <i class="fas fa-tag text-xs"></i>
+                                        </div>
+                                    @endif
                                     <a href="{{ route('equipment-categories.show', $category) }}"
                                         class="text-xs font-semibold text-slate-800 group-hover:text-amber-600 transition leading-tight">
                                         {{ $category->name }}</a>
@@ -221,14 +226,21 @@
                 pendingDeleteId = id;
                 document.getElementById('deleteItemName').textContent = name;
 
+                const confirmBtn = document.getElementById('deleteConfirmBtn');
                 if (itemsCount > 0) {
+                    // The server refuses to delete a category that still has items, so block it here too
                     document.getElementById('deleteWarningText').textContent =
                         'This category still has ' + itemsCount + ' equipment item' + (itemsCount === 1 ? '' : 's') +
-                        '. Those items may be deleted or left without a category.';
+                        '. Move or delete ' + (itemsCount === 1 ? 'it' : 'them') + ' first before deleting the category.';
                     warning.classList.remove('hidden');
+                    confirmBtn.disabled = true;
+                    confirmBtn.classList.add('opacity-50', 'cursor-not-allowed');
                 } else {
                     warning.classList.add('hidden');
+                    confirmBtn.disabled = false;
+                    confirmBtn.classList.remove('opacity-50', 'cursor-not-allowed');
                 }
+                confirmBtn.textContent = 'Yes, Delete';
 
                 modal.classList.remove('hidden');
             };
