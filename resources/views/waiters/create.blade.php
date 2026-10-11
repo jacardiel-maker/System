@@ -33,7 +33,8 @@
         </div>
     @endif
 
-    <form action="{{ route('waiters.store') }}" method="POST" class="space-y-6">
+    {{-- enctype is required for the photo upload --}}
+    <form action="{{ route('waiters.store') }}" method="POST" enctype="multipart/form-data" class="space-y-6">
         @csrf
 
         {{-- Personal Information --}}
@@ -48,6 +49,37 @@
             </div>
 
             <div class="p-6 space-y-5">
+                {{-- Photo --}}
+                <div class="flex flex-col sm:flex-row sm:items-center gap-4">
+                    <div class="relative shrink-0">
+                        <div id="photoPreviewWrap"
+                            class="w-24 h-24 rounded-2xl bg-slate-100 border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden @error('photo') border-rose-400 @enderror">
+                            <img id="photoPreview" src="" alt="Waiter photo preview" class="hidden w-full h-full object-cover">
+                            <svg id="photoPlaceholder" class="w-10 h-10 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                            </svg>
+                        </div>
+                        <button type="button" id="photoRemove" aria-label="Remove photo"
+                            class="hidden absolute -top-2 -right-2 w-6 h-6 rounded-full bg-white border border-slate-200 shadow-sm text-slate-500 hover:text-rose-600 flex items-center justify-center">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                    </div>
+                    <div class="space-y-1.5">
+                        <label class="block text-sm font-semibold text-slate-700">Photo <span class="text-slate-400 font-normal">(Optional)</span></label>
+                        <label for="photo"
+                            class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:border-amber-300 cursor-pointer transition-all">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            </svg>
+                            <span id="photoBtnText">Upload Photo</span>
+                        </label>
+                        <input type="file" name="photo" id="photo" accept="image/jpeg,image/png,image/webp" class="sr-only">
+                        <p id="photoHint" class="text-xs text-slate-500">JPG, PNG or WEBP. Max 2MB.</p>
+                        @error('photo')<p class="text-xs text-rose-600 font-medium">{{ $message }}</p>@enderror
+                    </div>
+                </div>
+
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <div class="space-y-1.5">
                         <label class="block text-sm font-semibold text-slate-700">Full Name <span class="text-rose-500">*</span></label>
@@ -107,7 +139,7 @@
                                 class="w-full rounded-xl border-slate-200 bg-slate-50/50 px-4 py-2.5 text-sm text-slate-900 focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/20 transition-all appearance-none cursor-pointer @error('region_id') border-rose-500 focus:border-rose-500 focus:ring-rose-500/20 @enderror">
                                 <option value="">Select Region</option>
                                 @foreach($regions as $region)
-                                    <option value="{{ $region->region_id }}" {{ old('region_id') == $region->region_id ? 'selected' : '' }}>
+                                    <option value="{{ $region->region_id }}" {{ (string) old('region_id') === (string) $region->region_id ? 'selected' : '' }}>
                                         {{ $region->name }}
                                     </option>
                                 @endforeach
@@ -185,8 +217,9 @@
 
             <div class="p-6 space-y-5">
                 <div class="space-y-1.5">
-                    <label class="block text-sm font-semibold text-slate-700">Date Hired</label>
-                    <input type="date" name="date_hired" value="{{ old('date_hired') }}"
+                    <label class="block text-sm font-semibold text-slate-700">Date Hired <span class="text-rose-500">*</span></label>
+                    <input type="date" name="date_hired" value="{{ old('date_hired', now()->format('Y-m-d')) }}" required
+                        max="{{ now()->format('Y-m-d') }}"
                         class="w-full sm:w-64 rounded-xl border-slate-200 bg-slate-50/50 px-4 py-2.5 text-sm text-slate-900 focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/20 transition-all @error('date_hired') border-rose-500 focus:border-rose-500 focus:ring-rose-500/20 @enderror">
                     @error('date_hired')<p class="text-xs text-rose-600 font-medium">{{ $message }}</p>@enderror
                 </div>
@@ -195,10 +228,10 @@
                     <div class="space-y-1.5">
                         <label class="block text-sm font-semibold text-slate-700">Password <span class="text-rose-500">*</span></label>
                         <div class="relative">
-                            <input type="password" name="password" id="password" required
+                            <input type="password" name="password" id="password" required minlength="8" autocomplete="new-password"
                                 class="w-full rounded-xl border-slate-200 bg-slate-50/50 px-4 py-2.5 pr-10 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/20 transition-all @error('password') border-rose-500 focus:border-rose-500 focus:ring-rose-500/20 @enderror"
                                 placeholder="••••••••">
-                            <button type="button" onclick="toggleEye('password', 'passEye')"
+                            <button type="button" onclick="toggleEye('password', 'passEye')" aria-label="Show password"
                                 class="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-amber-600 transition-colors focus:outline-none">
                                 <svg class="w-4 h-4" id="passEye-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
@@ -212,10 +245,10 @@
                     <div class="space-y-1.5">
                         <label class="block text-sm font-semibold text-slate-700">Confirm Password <span class="text-rose-500">*</span></label>
                         <div class="relative">
-                            <input type="password" name="password_confirmation" id="password_confirmation" required
+                            <input type="password" name="password_confirmation" id="password_confirmation" required autocomplete="new-password"
                                 class="w-full rounded-xl border-slate-200 bg-slate-50/50 px-4 py-2.5 pr-10 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/20 transition-all"
                                 placeholder="••••••••">
-                            <button type="button" onclick="toggleEye('password_confirmation', 'confirmEye')"
+                            <button type="button" onclick="toggleEye('password_confirmation', 'confirmEye')" aria-label="Show password"
                                 class="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-amber-600 transition-colors focus:outline-none">
                                 <svg class="w-4 h-4" id="confirmEye-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
@@ -246,14 +279,74 @@
 </div>
 
 <script>
+    // ---------- Photo preview ----------
+    (function () {
+        const input = document.getElementById('photo');
+        const preview = document.getElementById('photoPreview');
+        const placeholder = document.getElementById('photoPlaceholder');
+        const wrap = document.getElementById('photoPreviewWrap');
+        const removeBtn = document.getElementById('photoRemove');
+        const btnText = document.getElementById('photoBtnText');
+        const hint = document.getElementById('photoHint');
+        const MAX_BYTES = 2 * 1024 * 1024;
+        const ALLOWED = ['image/jpeg', 'image/png', 'image/webp'];
+
+        function reset(message) {
+            input.value = '';
+            preview.src = '';
+            preview.classList.add('hidden');
+            placeholder.classList.remove('hidden');
+            wrap.classList.add('border-dashed');
+            removeBtn.classList.add('hidden');
+            btnText.textContent = 'Upload Photo';
+            hint.textContent = message || 'JPG, PNG or WEBP. Max 2MB.';
+            hint.className = 'text-xs ' + (message ? 'text-rose-600 font-medium' : 'text-slate-500');
+        }
+
+        input.addEventListener('change', function () {
+            const file = this.files && this.files[0];
+            if (!file) return reset();
+
+            if (!ALLOWED.includes(file.type)) return reset('Please choose a JPG, PNG or WEBP image.');
+            if (file.size > MAX_BYTES) return reset('Image is too large. Max 2MB.');
+
+            const reader = new FileReader();
+            reader.onload = e => {
+                preview.src = e.target.result;
+                preview.classList.remove('hidden');
+                placeholder.classList.add('hidden');
+                wrap.classList.remove('border-dashed');
+                removeBtn.classList.remove('hidden');
+                btnText.textContent = 'Change Photo';
+                hint.textContent = file.name;
+                hint.className = 'text-xs text-slate-500 truncate max-w-[220px]';
+            };
+            reader.readAsDataURL(file);
+        });
+
+        removeBtn.addEventListener('click', () => reset());
+    })();
+
+    // ---------- Address cascading dropdowns ----------
     document.addEventListener('DOMContentLoaded', function () {
+        const apiBase = @json(url('api'));
         const region = document.getElementById('region');
         const province = document.getElementById('province');
         const city = document.getElementById('city');
         const barangay = document.getElementById('barangay');
-        const oldProvince = "{{ old('province_id') }}";
-        const oldCity = "{{ old('city_id') }}";
-        const oldBarangay = "{{ old('barangay_code') }}";
+        let oldProvince = @json((string) old('province_id'));
+        let oldCity = @json((string) old('city_id'));
+        let oldBarangay = @json((string) old('barangay_code'));
+
+        function fill(select, data, oldValue) {
+            data.forEach(item => {
+                const o = document.createElement('option');
+                o.value = item.id;
+                o.textContent = item.name;
+                if (oldValue && String(item.id) === oldValue) o.selected = true;
+                select.appendChild(o);
+            });
+        }
 
         region.addEventListener('change', function () {
             const rid = this.value;
@@ -262,14 +355,11 @@
             barangay.innerHTML = '<option value="">Select Barangay</option>'; barangay.disabled = true;
             if (!rid) { province.disabled = true; return; }
             province.disabled = false;
-            fetch(`/api/provinces/${rid}`)
+            fetch(`${apiBase}/provinces/${rid}`)
                 .then(r => r.json()).then(data => {
-                    data.forEach(p => {
-                        let o = document.createElement('option'); o.value = p.id; o.textContent = p.name;
-                        if (p.id === oldProvince) o.selected = true;
-                        province.appendChild(o);
-                    });
+                    fill(province, data, oldProvince);
                     if (oldProvince) province.dispatchEvent(new Event('change'));
+                    oldProvince = ''; // only restore once
                 });
         });
 
@@ -279,14 +369,11 @@
             barangay.innerHTML = '<option value="">Select Barangay</option>'; barangay.disabled = true;
             if (!pid) { city.disabled = true; return; }
             city.disabled = false;
-            fetch(`/api/cities/${pid}`)
+            fetch(`${apiBase}/cities/${pid}`)
                 .then(r => r.json()).then(data => {
-                    data.forEach(c => {
-                        let o = document.createElement('option'); o.value = c.id; o.textContent = c.name;
-                        if (c.id === oldCity) o.selected = true;
-                        city.appendChild(o);
-                    });
+                    fill(city, data, oldCity);
                     if (oldCity) city.dispatchEvent(new Event('change'));
+                    oldCity = '';
                 });
         });
 
@@ -295,13 +382,10 @@
             barangay.innerHTML = '<option value="">Select Barangay</option>';
             if (!cid) { barangay.disabled = true; return; }
             barangay.disabled = false;
-            fetch(`/api/barangays/${cid}`)
+            fetch(`${apiBase}/barangays/${cid}`)
                 .then(r => r.json()).then(data => {
-                    data.forEach(b => {
-                        let o = document.createElement('option'); o.value = b.id; o.textContent = b.name;
-                        if (b.id === oldBarangay) o.selected = true;
-                        barangay.appendChild(o);
-                    });
+                    fill(barangay, data, oldBarangay);
+                    oldBarangay = '';
                 });
         });
 

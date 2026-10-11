@@ -6,13 +6,34 @@
     {{-- Header --}}
     <div class="mb-8">
         <div class="flex items-center gap-2 text-sm text-slate-500 mb-2">
-            <a href="{{ route('events.show', $event) }}" class="hover:text-amber-700 transition-colors">Events</a>
+            <a href="{{ route('events.index') }}" class="hover:text-amber-700 transition-colors">Events</a>
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            <a href="{{ route('events.show', $event) }}" class="hover:text-amber-700 transition-colors truncate max-w-[200px]">{{ $event->event_name }}</a>
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
             <span class="text-slate-900 font-medium">Edit</span>
         </div>
         <h1 class="text-3xl font-bold text-slate-900 tracking-tight">{{ $event->event_name }}</h1>
         <p class="mt-1 text-sm text-slate-500">Update event details and team assignments</p>
     </div>
+
+    {{-- Error Summary --}}
+    @if($errors->any())
+        <div class="mb-6 rounded-xl bg-rose-50 border border-rose-200 px-4 py-4">
+            <div class="flex items-start gap-3">
+                <svg class="w-5 h-5 text-rose-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <div>
+                    <h3 class="text-sm font-semibold text-rose-800">Please fix the following errors:</h3>
+                    <ul class="mt-1.5 text-sm text-rose-700 list-disc list-inside space-y-0.5">
+                        @foreach($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            </div>
+        </div>
+    @endif
 
     <form action="{{ route('events.update', $event) }}" method="POST" class="space-y-6">
         @csrf
@@ -31,7 +52,7 @@
 
             <div class="p-6 space-y-5">
                 <div class="space-y-1.5">
-                    <label class="block text-sm font-semibold text-slate-700">Event Name</label>
+                    <label class="block text-sm font-semibold text-slate-700">Event Name <span class="text-rose-500">*</span></label>
                     <input type="text" name="event_name" value="{{ old('event_name', $event->event_name) }}" required
                         class="w-full rounded-xl border-slate-200 bg-slate-50/50 px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/20 transition-all @error('event_name') border-rose-500 focus:border-rose-500 focus:ring-rose-500/20 @enderror">
                     @error('event_name')
@@ -43,7 +64,7 @@
                 </div>
 
                 <div class="space-y-1.5">
-                    <label class="block text-sm font-semibold text-slate-700">Venue Address</label>
+                    <label class="block text-sm font-semibold text-slate-700">Venue Address <span class="text-rose-500">*</span></label>
                     <textarea name="venue_address" rows="3" required
                         class="w-full rounded-xl border-slate-200 bg-slate-50/50 px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/20 transition-all resize-none @error('venue_address') border-rose-500 focus:border-rose-500 focus:ring-rose-500/20 @enderror">{{ old('venue_address', $event->venue_address) }}</textarea>
                     @error('venue_address')
@@ -53,15 +74,15 @@
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <div class="space-y-1.5">
-                        <label class="block text-sm font-semibold text-slate-700">Event Date & Time</label>
-                        <input type="datetime-local" name="event_date" value="{{ old('event_date', $event->event_date->format('Y-m-d\TH:i')) }}" required
+                        <label class="block text-sm font-semibold text-slate-700">Event Date & Time <span class="text-rose-500">*</span></label>
+                        <input type="datetime-local" name="event_date" value="{{ old('event_date', $event->event_date?->format('Y-m-d\TH:i')) }}" required
                             class="w-full rounded-xl border-slate-200 bg-slate-50/50 px-4 py-2.5 text-sm text-slate-900 focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/20 transition-all @error('event_date') border-rose-500 focus:border-rose-500 focus:ring-rose-500/20 @enderror">
                         @error('event_date')<p class="text-xs text-rose-600 font-medium">{{ $message }}</p>@enderror
                     </div>
 
                     <div class="space-y-1.5">
-                        <label class="block text-sm font-semibold text-slate-700">Setup Time</label>
-                        <input type="datetime-local" name="setup_time" value="{{ old('setup_time', $event->setup_time->format('Y-m-d\TH:i')) }}" required
+                        <label class="block text-sm font-semibold text-slate-700">Setup Time <span class="text-rose-500">*</span></label>
+                        <input type="datetime-local" name="setup_time" value="{{ old('setup_time', $event->setup_time?->format('Y-m-d\TH:i')) }}" required
                             class="w-full rounded-xl border-slate-200 bg-slate-50/50 px-4 py-2.5 text-sm text-slate-900 focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/20 transition-all @error('setup_time') border-rose-500 focus:border-rose-500 focus:ring-rose-500/20 @enderror">
                         @error('setup_time')<p class="text-xs text-rose-600 font-medium">{{ $message }}</p>@enderror
                     </div>
@@ -96,14 +117,15 @@
                                 class="w-full rounded-xl border-slate-200 bg-slate-50/50 px-4 py-2.5 text-sm text-slate-900 focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/20 transition-all appearance-none cursor-pointer">
                                 @php
                                     $statuses = [
-                                        'scheduled' => ['Scheduled', 'bg-blue-50 text-blue-700'],
-                                        'ongoing' => ['Ongoing', 'bg-amber-50 text-amber-700'],
-                                        'completed' => ['Completed', 'bg-emerald-50 text-emerald-700'],
-                                        'cancelled' => ['Cancelled', 'bg-rose-50 text-rose-700'],
+                                        'scheduled' => 'Scheduled',
+                                        'ongoing'   => 'Ongoing',
+                                        'completed' => 'Completed',
+                                        'cancelled' => 'Cancelled',
                                     ];
+                                    $currentStatus = strtolower((string) old('status', $event->status));
                                 @endphp
                                 @foreach($statuses as $value => $label)
-                                    <option value="{{ $value }}" {{ old('status', $event->status) === $value ? 'selected' : '' }}>{{ $label[0] }}</option>
+                                    <option value="{{ $value }}" {{ $currentStatus === $value ? 'selected' : '' }}>{{ $label }}</option>
                                 @endforeach
                             </select>
                             <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
@@ -123,8 +145,13 @@
         </div>
 
         {{-- Team Assignment Card --}}
+        @php
+            // After a validation error, use what the user had picked; otherwise use the saved assignments.
+            $hasOldInput = old('_token') !== null;
+            $oldWaiters = collect(old('waiters', []))->filter(fn ($w) => !empty($w['id']))->keyBy('id');
+        @endphp
         <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-            <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+            <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between gap-3">
                 <div class="flex items-center gap-3">
                     <div class="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -136,36 +163,89 @@
                         <p class="text-xs text-slate-500">Re-assign waiters and update their roles</p>
                     </div>
                 </div>
-                <span class="text-xs font-medium text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">{{ $waiters->count() }} total</span>
+                @if($waiters->count() > 0)
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        <span id="waiterSelectedCount" class="text-xs font-semibold text-amber-700 bg-amber-100 px-2.5 py-1 rounded-full">0 selected</span>
+                        <span class="hidden sm:inline text-xs font-medium text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">{{ $waiters->count() }} total</span>
+                    </div>
+                @endif
             </div>
 
             <div class="p-6">
-                <div class="space-y-2 max-h-72 overflow-y-auto pr-1 custom-scrollbar">
-                    @foreach($waiters as $waiter)
-                        @php
-                            $existing = $event->waiters->firstWhere('id', $waiter->id);
-                        @endphp
-                        <label class="flex items-center gap-4 p-3 rounded-xl border border-slate-200 hover:border-amber-300 hover:bg-amber-50/30 transition-all cursor-pointer group has-[:checked]:border-amber-500 has-[:checked]:bg-amber-50/50 has-[:checked]:ring-1 has-[:checked]:ring-amber-500/20">
-                            <input type="checkbox" name="waiters[{{ $loop->index }}][id]" value="{{ $waiter->id }}"
-                                {{ $existing ? 'checked' : '' }}
-                                class="w-5 h-5 rounded-lg border-slate-300 text-amber-600 focus:ring-amber-500/20 focus:ring-2 cursor-pointer transition-all">
-
-                            <div class="flex-1 min-w-0">
-                                <p class="text-sm font-semibold text-slate-900 group-hover:text-amber-800 transition-colors">{{ $waiter->user->name }}</p>
-                                <p class="text-xs text-slate-500">{{ $waiter->phone }}</p>
-                            </div>
-
-                            <div class="flex-shrink-0">
-                                <select name="waiters[{{ $loop->index }}][role]"
-                                    class="text-sm rounded-lg border-slate-200 bg-white py-1.5 pl-3 pr-8 focus:border-amber-500 focus:ring-amber-500/20 cursor-pointer">
-                                    <option value="waiter" {{ $existing && $existing->pivot->role === 'waiter' ? 'selected' : '' }}>Waiter</option>
-                                    <option value="head_waiter" {{ $existing && $existing->pivot->role === 'head_waiter' ? 'selected' : '' }}>Head Waiter</option>
-                                    <option value="setup_crew" {{ $existing && $existing->pivot->role === 'setup_crew' ? 'selected' : '' }}>Setup Crew</option>
-                                </select>
-                            </div>
+                @if($waiters->count() > 0)
+                    {{-- Search waiter by name --}}
+                    <div class="flex flex-col sm:flex-row gap-2 mb-3">
+                        <div class="relative flex-1">
+                            <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                            </svg>
+                            <input type="text" id="waiterSearch" placeholder="Search waiter by name..." autocomplete="off"
+                                class="w-full rounded-xl border-slate-200 bg-slate-50/50 pl-9 pr-9 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/20 transition-all">
+                            <button type="button" id="waiterSearchClear" aria-label="Clear search"
+                                class="hidden absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            </button>
+                        </div>
+                        <label class="inline-flex items-center gap-2 text-xs font-medium text-slate-600 px-3 py-2 rounded-xl border border-slate-200 bg-white cursor-pointer hover:bg-slate-50 select-none">
+                            <input type="checkbox" id="waiterShowSelected" class="w-4 h-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500/20">
+                            Show selected only
                         </label>
-                    @endforeach
-                </div>
+                    </div>
+
+                    <div id="waiterList" class="space-y-2 max-h-72 overflow-y-auto pr-1 custom-scrollbar">
+                        @foreach($waiters as $waiter)
+                            @php
+                                $wName = $waiter->user->name ?? 'Unknown';
+                                $existing = $event->waiters->firstWhere('id', $waiter->id);
+
+                                if ($hasOldInput) {
+                                    $pick = $oldWaiters->get((string) $waiter->id) ?? $oldWaiters->get($waiter->id);
+                                    $isChecked = (bool) $pick;
+                                    $role = $pick['role'] ?? ($existing->pivot->role ?? 'waiter');
+                                } else {
+                                    $isChecked = (bool) $existing;
+                                    $role = $existing->pivot->role ?? 'waiter';
+                                }
+                            @endphp
+                            <label data-waiter-name="{{ strtolower($wName) }}"
+                                class="waiter-row flex items-center gap-4 p-3 rounded-xl border border-slate-200 hover:border-amber-300 hover:bg-amber-50/30 transition-all cursor-pointer group has-[:checked]:border-amber-500 has-[:checked]:bg-amber-50/50 has-[:checked]:ring-1 has-[:checked]:ring-amber-500/20">
+                                <input type="checkbox" name="waiters[{{ $loop->index }}][id]" value="{{ $waiter->id }}"
+                                    {{ $isChecked ? 'checked' : '' }}
+                                    class="waiter-check w-5 h-5 rounded-lg border-slate-300 text-amber-600 focus:ring-amber-500/20 focus:ring-2 cursor-pointer transition-all">
+
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-sm font-semibold text-slate-900 group-hover:text-amber-800 transition-colors truncate">
+                                        {{ $wName }}
+                                        @if($existing)
+                                            <span class="ml-1 align-middle text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">Assigned</span>
+                                        @endif
+                                    </p>
+                                    <p class="text-xs text-slate-500">{{ $waiter->phone ?: '—' }}</p>
+                                </div>
+
+                                <div class="flex-shrink-0">
+                                    <select name="waiters[{{ $loop->index }}][role]"
+                                        class="text-sm rounded-lg border-slate-200 bg-white py-1.5 pl-3 pr-8 focus:border-amber-500 focus:ring-amber-500/20 cursor-pointer">
+                                        <option value="waiter" {{ $role === 'waiter' ? 'selected' : '' }}>Waiter</option>
+                                        <option value="head_waiter" {{ $role === 'head_waiter' ? 'selected' : '' }}>Head Waiter</option>
+                                        <option value="setup_crew" {{ $role === 'setup_crew' ? 'selected' : '' }}>Setup Crew</option>
+                                    </select>
+                                </div>
+                            </label>
+                        @endforeach
+
+                        <div id="waiterNoResults" class="hidden text-center py-6 text-sm text-slate-500">
+                            No waiter matches "<span id="waiterNoResultsTerm" class="font-semibold text-slate-700"></span>".
+                        </div>
+                    </div>
+                @else
+                    <div class="text-center py-8">
+                        <p class="text-sm text-slate-500">No active waiters found.</p>
+                        <a href="{{ route('waiters.create') }}" class="inline-flex items-center mt-2 text-sm font-medium text-amber-700 hover:text-amber-800 hover:underline">
+                            Add a waiter first
+                        </a>
+                    </div>
+                @endif
             </div>
         </div>
 
@@ -192,4 +272,62 @@
     .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
     .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: #94a3b8; }
 </style>
+
+<script>
+    (function () {
+        const search = document.getElementById('waiterSearch');
+        if (!search) return; // no waiters on the page
+
+        const clearBtn = document.getElementById('waiterSearchClear');
+        const showSelected = document.getElementById('waiterShowSelected');
+        const rows = Array.from(document.querySelectorAll('.waiter-row'));
+        const checks = Array.from(document.querySelectorAll('.waiter-check'));
+        const countEl = document.getElementById('waiterSelectedCount');
+        const noResults = document.getElementById('waiterNoResults');
+        const noResultsTerm = document.getElementById('waiterNoResultsTerm');
+
+        function applyFilter() {
+            const term = search.value.trim().toLowerCase();
+            const onlySelected = showSelected.checked;
+            let visible = 0;
+
+            rows.forEach(row => {
+                const matchesName = !term || row.dataset.waiterName.includes(term);
+                const isChecked = row.querySelector('.waiter-check').checked;
+                const show = matchesName && (!onlySelected || isChecked);
+                row.style.display = show ? '' : 'none';
+                if (show) visible++;
+            });
+
+            clearBtn.classList.toggle('hidden', !term);
+            noResults.classList.toggle('hidden', visible > 0);
+            noResultsTerm.textContent = term || (onlySelected ? 'selected' : '');
+        }
+
+        function updateCount() {
+            const n = checks.filter(c => c.checked).length;
+            countEl.textContent = n + ' selected';
+        }
+
+        search.addEventListener('input', applyFilter);
+        // Pressing Enter in the search box should not submit the whole event form
+        search.addEventListener('keydown', e => { if (e.key === 'Enter') e.preventDefault(); });
+
+        clearBtn.addEventListener('click', () => {
+            search.value = '';
+            applyFilter();
+            search.focus();
+        });
+
+        showSelected.addEventListener('change', applyFilter);
+
+        checks.forEach(c => c.addEventListener('change', () => {
+            updateCount();
+            if (showSelected.checked) applyFilter();
+        }));
+
+        updateCount();
+        applyFilter();
+    })();
+</script>
 @endsection

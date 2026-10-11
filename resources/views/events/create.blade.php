@@ -133,8 +133,12 @@
         </div>
 
         {{-- Team Assignment Card --}}
+        @php
+            // Re-check waiters (and keep their role) if the form comes back with validation errors
+            $oldWaiters = collect(old('waiters', []))->filter(fn ($w) => !empty($w['id']))->keyBy('id');
+        @endphp
         <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-            <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+            <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between gap-3">
                 <div class="flex items-center gap-3">
                     <div class="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -147,33 +151,66 @@
                     </div>
                 </div>
                 @if($waiters->count() > 0)
-                    <span class="text-xs font-medium text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">{{ $waiters->count() }} available</span>
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        <span id="waiterSelectedCount" class="text-xs font-semibold text-amber-700 bg-amber-100 px-2.5 py-1 rounded-full">0 selected</span>
+                        <span class="hidden sm:inline text-xs font-medium text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">{{ $waiters->count() }} available</span>
+                    </div>
                 @endif
             </div>
 
             <div class="p-6">
                 @if($waiters->count() > 0)
-                    <div class="space-y-2 max-h-72 overflow-y-auto pr-1 custom-scrollbar">
+                    {{-- Search waiter by name --}}
+                    <div class="flex flex-col sm:flex-row gap-2 mb-3">
+                        <div class="relative flex-1">
+                            <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                            </svg>
+                            <input type="text" id="waiterSearch" placeholder="Search waiter by name..." autocomplete="off"
+                                class="w-full rounded-xl border-slate-200 bg-slate-50/50 pl-9 pr-9 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/20 transition-all">
+                            <button type="button" id="waiterSearchClear" aria-label="Clear search"
+                                class="hidden absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            </button>
+                        </div>
+                        <label class="inline-flex items-center gap-2 text-xs font-medium text-slate-600 px-3 py-2 rounded-xl border border-slate-200 bg-white cursor-pointer hover:bg-slate-50 select-none">
+                            <input type="checkbox" id="waiterShowSelected" class="w-4 h-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500/20">
+                            Show selected only
+                        </label>
+                    </div>
+
+                    <div id="waiterList" class="space-y-2 max-h-72 overflow-y-auto pr-1 custom-scrollbar">
                         @foreach($waiters as $waiter)
-                            <label class="flex items-center gap-4 p-3 rounded-xl border border-slate-200 hover:border-amber-300 hover:bg-amber-50/30 transition-all cursor-pointer group has-[:checked]:border-amber-500 has-[:checked]:bg-amber-50/50 has-[:checked]:ring-1 has-[:checked]:ring-amber-500/20">
+                            @php
+                                $wName = $waiter->user->name ?? 'Unknown';
+                                $oldPick = $oldWaiters->get((string) $waiter->id) ?? $oldWaiters->get($waiter->id);
+                                $oldRole = $oldPick['role'] ?? 'waiter';
+                            @endphp
+                            <label data-waiter-name="{{ strtolower($wName) }}"
+                                class="waiter-row flex items-center gap-4 p-3 rounded-xl border border-slate-200 hover:border-amber-300 hover:bg-amber-50/30 transition-all cursor-pointer group has-[:checked]:border-amber-500 has-[:checked]:bg-amber-50/50 has-[:checked]:ring-1 has-[:checked]:ring-amber-500/20">
                                 <input type="checkbox" name="waiters[{{ $loop->index }}][id]" value="{{ $waiter->id }}"
-                                    class="w-5 h-5 rounded-lg border-slate-300 text-amber-600 focus:ring-amber-500/20 focus:ring-2 cursor-pointer transition-all">
-                                
+                                    {{ $oldPick ? 'checked' : '' }}
+                                    class="waiter-check w-5 h-5 rounded-lg border-slate-300 text-amber-600 focus:ring-amber-500/20 focus:ring-2 cursor-pointer transition-all">
+
                                 <div class="flex-1 min-w-0">
-                                    <p class="text-sm font-semibold text-slate-900 group-hover:text-amber-800 transition-colors">{{ $waiter->user->name }}</p>
-                                    <p class="text-xs text-slate-500">{{ $waiter->phone }}</p>
+                                    <p class="text-sm font-semibold text-slate-900 group-hover:text-amber-800 transition-colors truncate">{{ $wName }}</p>
+                                    <p class="text-xs text-slate-500">{{ $waiter->phone ?: '—' }}</p>
                                 </div>
 
                                 <div class="flex-shrink-0">
                                     <select name="waiters[{{ $loop->index }}][role]"
                                         class="text-sm rounded-lg border-slate-200 bg-white py-1.5 pl-3 pr-8 focus:border-amber-500 focus:ring-amber-500/20 cursor-pointer">
-                                        <option value="waiter">Waiter</option>
-                                        <option value="head_waiter">Head Waiter</option>
-                                        <option value="setup_crew">Setup Crew</option>
+                                        <option value="waiter" {{ $oldRole === 'waiter' ? 'selected' : '' }}>Waiter</option>
+                                        <option value="head_waiter" {{ $oldRole === 'head_waiter' ? 'selected' : '' }}>Head Waiter</option>
+                                        <option value="setup_crew" {{ $oldRole === 'setup_crew' ? 'selected' : '' }}>Setup Crew</option>
                                     </select>
                                 </div>
                             </label>
                         @endforeach
+
+                        <div id="waiterNoResults" class="hidden text-center py-6 text-sm text-slate-500">
+                            No waiter matches "<span id="waiterNoResultsTerm" class="font-semibold text-slate-700"></span>".
+                        </div>
                     </div>
                 @else
                     <div class="text-center py-8">
@@ -224,4 +261,62 @@
         background-color: #94a3b8;
     }
 </style>
+
+<script>
+    (function () {
+        const search = document.getElementById('waiterSearch');
+        if (!search) return; // no waiters on the page
+
+        const clearBtn = document.getElementById('waiterSearchClear');
+        const showSelected = document.getElementById('waiterShowSelected');
+        const rows = Array.from(document.querySelectorAll('.waiter-row'));
+        const checks = Array.from(document.querySelectorAll('.waiter-check'));
+        const countEl = document.getElementById('waiterSelectedCount');
+        const noResults = document.getElementById('waiterNoResults');
+        const noResultsTerm = document.getElementById('waiterNoResultsTerm');
+
+        function applyFilter() {
+            const term = search.value.trim().toLowerCase();
+            const onlySelected = showSelected.checked;
+            let visible = 0;
+
+            rows.forEach(row => {
+                const matchesName = !term || row.dataset.waiterName.includes(term);
+                const isChecked = row.querySelector('.waiter-check').checked;
+                const show = matchesName && (!onlySelected || isChecked);
+                row.style.display = show ? '' : 'none';
+                if (show) visible++;
+            });
+
+            clearBtn.classList.toggle('hidden', !term);
+            noResults.classList.toggle('hidden', visible > 0);
+            noResultsTerm.textContent = term || (onlySelected ? 'selected' : '');
+        }
+
+        function updateCount() {
+            const n = checks.filter(c => c.checked).length;
+            countEl.textContent = n + ' selected';
+        }
+
+        search.addEventListener('input', applyFilter);
+        // Pressing Enter in the search box should not submit the whole event form
+        search.addEventListener('keydown', e => { if (e.key === 'Enter') e.preventDefault(); });
+
+        clearBtn.addEventListener('click', () => {
+            search.value = '';
+            applyFilter();
+            search.focus();
+        });
+
+        showSelected.addEventListener('change', applyFilter);
+
+        checks.forEach(c => c.addEventListener('change', () => {
+            updateCount();
+            if (showSelected.checked) applyFilter();
+        }));
+
+        updateCount();
+        applyFilter();
+    })();
+</script>
 @endsection

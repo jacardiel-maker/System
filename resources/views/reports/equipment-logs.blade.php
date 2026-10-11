@@ -2,170 +2,330 @@
 @section('title', 'Equipment Logs Report')
 
 @section('content')
-<style>
-    @media print {
-        nav, .no-print, form, aside, header, .sidebar-link { display: none !important; }
-        body { background: white !important; font-family: 'Inter', sans-serif; }
-        .print-only { display: block !important; }
-        .print-header { background: linear-gradient(135deg, #1e293b 0%, #334155 100%) !important; color: white !important; padding: 30px !important; border-radius: 0 !important; }
-        .print-header h1 { color: white !important; font-size: 28px !important; margin: 0 !important; }
-        .print-header p { color: #cbd5e1 !important; margin: 5px 0 0 !important; font-size: 14px !important; }
-        table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 11px; margin-top: 20px; }
-        th { background: #f8fafc !important; color: #475569 !important; font-weight: 700; text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em; padding: 12px 10px; border-bottom: 2px solid #e2e8f0; text-align: left; }
-        td { padding: 10px; border-bottom: 1px solid #f1f5f9; color: #334155; }
-        tr:last-child td { border-bottom: 2px solid #e2e8f0; }
-        .print-badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-weight: 600; font-size: 10px; }
-        .print-badge-allocated { background: #dbeafe; color: #1e40af; }
-        .print-badge-returned { background: #d1fae5; color: #065f46; }
-        .print-badge-damaged { background: #ffedd5; color: #9a3412; }
-        .print-badge-missing { background: #fee2e2; color: #991b1b; }
-        .print-footer { margin-top: 30px; padding-top: 15px; border-top: 2px solid #e2e8f0; text-align: center; color: #94a3b8; font-size: 11px; }
-        .print-meta { background: #f8fafc; padding: 15px; border-radius: 8px; margin: 15px 0; font-size: 12px; color: #64748b; }
-        .print-meta strong { color: #334155; }
-    }
-    .print-only { display: none; }
-</style>
+    @php
+        $actionConfig = [
+            'allocated' => ['bg-blue-50 text-blue-600', 'Allocated', 'fa-arrow-right'],
+            'returned'  => ['bg-emerald-50 text-emerald-600', 'Returned', 'fa-check'],
+            'damaged'   => ['bg-orange-50 text-orange-600', 'Damaged', 'fa-exclamation'],
+            'missing'   => ['bg-red-50 text-red-600', 'Missing', 'fa-times'],
+        ];
+        $currentAction = strtolower((string) request('action'));
+        $hasFilters = request('from') || request('to') || request('action');
 
-{{-- Print Header --}}
-<div class="print-only print-header">
-    <h1><i class="fas fa-utensils mr-2"></i>Steph's Catering by Chef Nono</h1>
-    <p>Equipment Activity Logs Report</p>
-</div>
+        // Works for a collection or a paginator
+        $rows = collect($logs instanceof \Illuminate\Pagination\AbstractPaginator ? $logs->items() : $logs);
+        $actionOf = fn ($l) => strtolower(trim((string) $l->action));
 
-<div class="print-only print-meta">
-    <div><strong>Generated:</strong> {{ now()->format('F d, Y h:i A') }}</div>
-    @if(request('from') || request('to'))
-    <div><strong>Period:</strong> {{ request('from') ?? 'All' }} to {{ request('to') ?? 'All' }}</div>
-    @endif
-    @if(request('action'))
-    <div><strong>Action Filter:</strong> {{ ucfirst(request('action')) }}</div>
-    @endif
-</div>
+        // Units per action (e.g. 120 allocated, 110 returned, 6 damaged, 4 missing)
+        $summary = ['entries' => $rows->count()];
+        foreach (array_keys($actionConfig) as $a) {
+            $summary[$a] = (int) $rows->filter(fn ($l) => $actionOf($l) === $a)->sum('quantity');
+        }
 
-{{-- Screen Header --}}
-<div class="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 no-print">
-    <div>
-        <h1 class="text-3xl font-bold text-slate-800">Equipment Activity Logs</h1>
-        <p class="text-slate-400 mt-1">Track all equipment movements and accountability</p>
-    </div>
-    <div class="flex gap-3">
-        <a href="{{ route('reports.index') }}" class="px-5 py-3 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50 transition flex items-center gap-2">
-            <i class="fas fa-arrow-left"></i> Back
-        </a>
-        <button onclick="window.print()" class="btn-primary text-white px-5 py-3 rounded-xl text-sm font-semibold inline-flex items-center gap-2">
-            <i class="fas fa-print"></i> Print Report
-        </button>
-    </div>
-</div>
+        $fromLabel = request('from') ? \Carbon\Carbon::parse(request('from'))->format('M d, Y') : null;
+        $toLabel = request('to') ? \Carbon\Carbon::parse(request('to'))->format('M d, Y') : null;
+        $periodLabel = ($fromLabel || $toLabel)
+            ? ($fromLabel ?? 'Beginning') . ' – ' . ($toLabel ?? 'Present')
+            : 'All dates';
 
-{{-- Filter Card --}}
-<div class="bg-white rounded-2xl border border-slate-100 p-6 mb-6 shadow-sm no-print">
-    <form action="{{ route('reports.equipment-logs') }}" method="GET" class="flex flex-wrap gap-4 items-end">
-        <div>
-            <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">From Date</label>
-            <input type="date" name="from" value="{{ request('from') }}" class="input-modern rounded-xl px-4 py-2.5 text-sm bg-slate-50 w-44">
+        $removeFilter = function ($key) {
+            return route('reports.equipment-logs', array_diff_key(request()->query(), [$key => 1]));
+        };
+    @endphp
+
+    <style>
+        .print-only { display: none; }
+
+        @media print {
+            /* Landscape: this table has many columns and long remarks */
+            @page { size: A4 landscape; margin: 10mm; }
+
+            /* Undo the app shell (sidebar, fixed-height screen) so every page prints */
+            aside, header, .no-print { display: none !important; }
+            body, html { background: #fff !important; height: auto !important; overflow: visible !important; }
+            .h-screen { height: auto !important; display: block !important; overflow: visible !important; }
+            main { padding: 0 !important; overflow: visible !important; }
+            main > .animate-fade-in { display: none !important; } /* flash messages */
+            .print-only { display: block !important; }
+            span.print-only { display: inline !important; }
+
+            .report-card { border: none !important; box-shadow: none !important; border-radius: 0 !important; }
+            .overflow-x-auto { overflow: visible !important; }
+
+            .report-table { width: 100%; min-width: 0 !important; border-collapse: collapse; font-size: 10px; }
+            .report-table thead { display: table-header-group; } /* repeat header on each page */
+            .report-table tr { page-break-inside: avoid; break-inside: avoid; }
+            .report-table th, .report-table td {
+                border: 1px solid #94a3b8 !important;
+                padding: 4px 6px !important;
+                color: #0f172a !important;
+                vertical-align: top;
+            }
+            .report-table th {
+                background: #f1f5f9 !important;
+                font-size: 9px !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .report-table .badge {
+                background: none !important;
+                color: #0f172a !important;
+                padding: 0 !important;
+                font-weight: 600;
+            }
+            .report-table .badge i { display: none !important; }
+
+            .print-summary td { border: 1px solid #94a3b8; padding: 4px 8px; font-size: 10px; }
+            .signature-block { page-break-inside: avoid; break-inside: avoid; }
+        }
+    </style>
+
+    {{-- ================= PRINT HEADER ================= --}}
+    <div class="print-only mb-3">
+        <div class="text-center">
+            <h1 style="font-size:18px; font-weight:800; color:#0f172a;">Steph's Catering by Chef Nono</h1>
+            <p style="font-size:13px; font-weight:600; color:#334155; margin-top:2px;">EQUIPMENT ACTIVITY LOGS REPORT</p>
         </div>
-        <div>
-            <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">To Date</label>
-            <input type="date" name="to" value="{{ request('to') }}" class="input-modern rounded-xl px-4 py-2.5 text-sm bg-slate-50 w-44">
-        </div>
-        <div>
-            <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Action</label>
-            <select name="action" class="input-modern rounded-xl px-4 py-2.5 text-sm bg-slate-50 w-40">
-                <option value="">All Actions</option>
-                <option value="allocated" {{ request('action') === 'allocated' ? 'selected' : '' }}>Allocated</option>
-                <option value="returned" {{ request('action') === 'returned' ? 'selected' : '' }}>Returned</option>
-                <option value="damaged" {{ request('action') === 'damaged' ? 'selected' : '' }}>Damaged</option>
-                <option value="missing" {{ request('action') === 'missing' ? 'selected' : '' }}>Missing</option>
-            </select>
-        </div>
-        <div class="flex gap-2">
-            <button type="submit" class="btn-primary text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:shadow-lg transition">
-                <i class="fas fa-filter mr-1"></i> Filter
-            </button>
-            <a href="{{ route('reports.equipment-logs') }}" class="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-500 text-sm font-semibold hover:bg-slate-50 transition">
-                Reset
-            </a>
-        </div>
-    </form>
-</div>
 
-{{-- Data Table --}}
-<div class="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
-    <div class="overflow-x-auto">
-        <table class="w-full">
-            <thead>
-                <tr class="bg-slate-50/50 border-b border-slate-100">
-                    <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Date & Time</th>
-                    <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Event</th>
-                    <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Equipment</th>
-                    <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Action</th>
-                    <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Qty</th>
-                    <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Logged By</th>
-                    <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Remarks</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-50">
-                @forelse($logs as $log)
-                <tr class="table-row group">
-                    <td class="px-6 py-4 text-sm text-slate-500 whitespace-nowrap">
-                        <div class="font-medium text-slate-700">{{ $log->created_at->format('M d, Y') }}</div>
-                        <div class="text-xs text-slate-400">{{ $log->created_at->format('h:i A') }}</div>
-                    </td>
-                    <td class="px-6 py-4 text-sm font-medium text-slate-700">
-                        {{ $log->eventEquipment->event->event_name ?? 'N/A' }}
-                    </td>
-                    <td class="px-6 py-4 text-sm text-slate-600">
-                        {{ $log->eventEquipment->equipmentItem->name ?? 'N/A' }}
-                    </td>
-                    <td class="px-6 py-4">
-                        <span class="status-badge px-3 py-1 rounded-full text-xs
-                            {{ $log->action === 'allocated' ? 'bg-blue-50 text-blue-600' : '' }}
-                            {{ $log->action === 'returned' ? 'bg-emerald-50 text-emerald-600' : '' }}
-                            {{ $log->action === 'damaged' ? 'bg-orange-50 text-orange-600' : '' }}
-                            {{ $log->action === 'missing' ? 'bg-red-50 text-red-600' : '' }}">
-                            <i class="fas fa-{{ $log->action === 'allocated' ? 'arrow-right' : ($log->action === 'returned' ? 'check' : ($log->action === 'damaged' ? 'exclamation' : 'times')) }} mr-1 text-[10px]"></i>
-                            {{ ucfirst($log->action) }}
-                        </span>
-                        {{-- Print-only badge --}}
-                        <span class="print-only print-badge
-                            {{ $log->action === 'allocated' ? 'print-badge-allocated' : '' }}
-                            {{ $log->action === 'returned' ? 'print-badge-returned' : '' }}
-                            {{ $log->action === 'damaged' ? 'print-badge-damaged' : '' }}
-                            {{ $log->action === 'missing' ? 'print-badge-missing' : '' }}">
-                            {{ ucfirst($log->action) }}
-                        </span>
-                    </td>
-                    <td class="px-6 py-4 text-sm font-bold text-slate-700">{{ $log->quantity }}</td>
-                    <td class="px-6 py-4 text-sm text-slate-500">
-                        <div class="flex items-center gap-2">
-                            <div class="w-6 h-6 rounded-full bg-gradient-to-br from-slate-600 to-slate-700 text-white flex items-center justify-center text-[10px] font-bold">
-                                {{ strtoupper(substr($log->logger->name ?? '?', 0, 1)) }}
-                            </div>
-                            {{ $log->logger->name ?? 'System' }}
-                        </div>
-                    </td>
-                    <td class="px-6 py-4 text-sm text-slate-500 max-w-xs truncate" title="{{ $log->remarks ?? '' }}">
-                        {{ $log->remarks ?? '—' }}
-                    </td>
-                </tr>
-                @empty
-                <tr>
-                    <td colspan="7" class="px-6 py-16 text-center">
-                        <div class="text-slate-300 text-5xl mb-4"><i class="fas fa-clipboard-list"></i></div>
-                        <p class="text-slate-400 font-medium">No activity logs found</p>
-                        <p class="text-slate-300 text-sm mt-1">Try adjusting your filters</p>
-                    </td>
-                </tr>
-                @endforelse
-            </tbody>
+        <table style="width:100%; margin-top:10px; font-size:10px; color:#334155;">
+            <tr>
+                <td><strong>Period:</strong> {{ $periodLabel }}</td>
+                <td style="text-align:right;"><strong>Generated:</strong> {{ now()->format('F d, Y h:i A') }}</td>
+            </tr>
+            <tr>
+                <td><strong>Action:</strong> {{ $actionConfig[$currentAction][1] ?? 'All Actions' }}</td>
+                <td style="text-align:right;"><strong>Prepared by:</strong> {{ auth()->user()->name }}</td>
+            </tr>
         </table>
-    </div>
-</div>
 
-{{-- Print Footer --}}
-<div class="print-only print-footer">
-    <p><strong>{{ $logs->count() }}</strong> log entries found</p>
-    <p>Steph's Catering by Chef Nono &copy; {{ date('Y') }} | Confidential Report</p>
-</div>
+        <table class="print-summary" style="width:100%; border-collapse:collapse; margin-top:8px;">
+            <tr>
+                <td><strong>Log Entries:</strong> {{ number_format($summary['entries']) }}</td>
+                <td><strong>Units Allocated:</strong> {{ number_format($summary['allocated']) }}</td>
+                <td><strong>Units Returned:</strong> {{ number_format($summary['returned']) }}</td>
+                <td><strong>Units Damaged:</strong> {{ number_format($summary['damaged']) }}</td>
+                <td><strong>Units Missing:</strong> {{ number_format($summary['missing']) }}</td>
+            </tr>
+        </table>
+        <hr style="margin-top:10px; border-color:#cbd5e1;">
+    </div>
+
+    {{-- ================= SCREEN HEADER ================= --}}
+    <div class="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 no-print">
+        <div>
+            <div class="flex items-center gap-1.5 text-xs text-slate-400 mb-1">
+                <a href="{{ route('reports.index') }}" class="hover:text-amber-700 transition-colors">Reports</a>
+                <i class="fas fa-chevron-right text-[9px]"></i>
+                <span class="text-slate-600 font-medium">Equipment Logs</span>
+            </div>
+            <h1 class="text-2xl font-bold text-slate-800 leading-tight">Equipment Activity Logs</h1>
+            <p class="text-slate-400 text-sm">Track all equipment movements and accountability</p>
+        </div>
+        <div class="flex items-center gap-2 self-start sm:self-auto">
+            <a href="{{ route('reports.index') }}"
+                class="px-3 py-2 rounded-lg border border-slate-200 text-slate-600 text-sm font-semibold hover:bg-slate-50 transition inline-flex items-center gap-2">
+                <i class="fas fa-arrow-left text-xs"></i> Back
+            </a>
+            <button type="button" onclick="window.print()"
+                class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-semibold inline-flex items-center gap-2 transition">
+                <i class="fas fa-print text-xs"></i> Print Report
+            </button>
+        </div>
+    </div>
+
+    {{-- ================= FILTERS ================= --}}
+    <div class="bg-white rounded-xl border border-slate-100 shadow-sm p-3 mb-3 no-print">
+        <form action="{{ route('reports.equipment-logs') }}" method="GET" class="flex flex-col lg:flex-row gap-2 lg:items-end">
+            <div class="w-full lg:w-40">
+                <label for="f-from" class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">From Date</label>
+                <input id="f-from" type="date" name="from" value="{{ request('from') }}" max="{{ request('to') }}"
+                    class="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent">
+            </div>
+            <div class="w-full lg:w-40">
+                <label for="f-to" class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">To Date</label>
+                <input id="f-to" type="date" name="to" value="{{ request('to') }}" min="{{ request('from') }}"
+                    class="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent">
+            </div>
+            <div class="w-full lg:w-40">
+                <label for="f-action" class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Action</label>
+                <select id="f-action" name="action" onchange="this.form.submit()"
+                    class="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent bg-white">
+                    <option value="">All Actions</option>
+                    @foreach($actionConfig as $value => $cfg)
+                        <option value="{{ $value }}" {{ $currentAction === $value ? 'selected' : '' }}>{{ $cfg[1] }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="flex gap-2 w-full lg:w-auto">
+                <button type="submit" title="Filter" aria-label="Filter"
+                    class="flex-1 lg:flex-none lg:w-9 h-8 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition flex items-center justify-center gap-2 text-xs font-semibold">
+                    <i class="fas fa-filter text-xs"></i><span class="lg:hidden">Filter</span>
+                </button>
+                <a href="{{ route('reports.equipment-logs') }}" title="Reset" aria-label="Reset"
+                    class="flex-1 lg:flex-none lg:w-9 h-8 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition flex items-center justify-center gap-2 text-xs font-semibold">
+                    <i class="fas fa-undo text-xs"></i><span class="lg:hidden">Reset</span>
+                </a>
+            </div>
+        </form>
+
+        @if($hasFilters)
+            <div class="mt-2 pt-2 border-t border-slate-100 flex flex-wrap items-center gap-1.5">
+                <span class="text-xs text-slate-400 font-medium">Active filters:</span>
+                @if(request('from'))
+                    <span class="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-full text-xs font-medium">
+                        From: {{ $fromLabel }}
+                        <a href="{{ $removeFilter('from') }}" class="ml-1 hover:text-emerald-900" aria-label="Remove from-date filter"><i class="fas fa-times"></i></a>
+                    </span>
+                @endif
+                @if(request('to'))
+                    <span class="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-full text-xs font-medium">
+                        To: {{ $toLabel }}
+                        <a href="{{ $removeFilter('to') }}" class="ml-1 hover:text-emerald-900" aria-label="Remove to-date filter"><i class="fas fa-times"></i></a>
+                    </span>
+                @endif
+                @if(request('action'))
+                    <span class="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
+                        Action: {{ $actionConfig[$currentAction][1] ?? ucfirst($currentAction) }}
+                        <a href="{{ $removeFilter('action') }}" class="ml-1 hover:text-blue-900" aria-label="Remove action filter"><i class="fas fa-times"></i></a>
+                    </span>
+                @endif
+            </div>
+        @endif
+    </div>
+
+    {{-- ================= SUMMARY CARDS (screen) ================= --}}
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 mb-3 no-print">
+        <div class="bg-white rounded-xl border border-slate-100 shadow-sm px-3 py-2">
+            <div class="text-lg font-bold text-slate-800 leading-none">{{ number_format($summary['entries']) }}</div>
+            <div class="text-[11px] text-slate-500 mt-1">Log Entries</div>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-100 shadow-sm px-3 py-2">
+            <div class="text-lg font-bold text-blue-600 leading-none">{{ number_format($summary['allocated']) }}</div>
+            <div class="text-[11px] text-slate-500 mt-1">Units Allocated</div>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-100 shadow-sm px-3 py-2">
+            <div class="text-lg font-bold text-emerald-600 leading-none">{{ number_format($summary['returned']) }}</div>
+            <div class="text-[11px] text-slate-500 mt-1">Units Returned</div>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-100 shadow-sm px-3 py-2">
+            <div class="text-lg font-bold text-orange-600 leading-none">{{ number_format($summary['damaged']) }}</div>
+            <div class="text-[11px] text-slate-500 mt-1">Units Damaged</div>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-100 shadow-sm px-3 py-2">
+            <div class="text-lg font-bold text-red-600 leading-none">{{ number_format($summary['missing']) }}</div>
+            <div class="text-[11px] text-slate-500 mt-1">Units Missing</div>
+        </div>
+    </div>
+
+    {{-- ================= TABLE ================= --}}
+    <div class="report-card bg-white rounded-xl border border-slate-100 shadow-sm">
+        <div class="overflow-x-auto">
+            <table class="report-table w-full min-w-[900px]">
+                <thead>
+                    <tr class="bg-slate-50/50 border-b border-slate-100">
+                        <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider w-10">#</th>
+                        <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Date & Time</th>
+                        <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Event</th>
+                        <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Equipment</th>
+                        <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Action</th>
+                        <th class="px-3 py-2 text-center text-[11px] font-bold text-slate-400 uppercase tracking-wider">Qty</th>
+                        <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Logged By</th>
+                        <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Remarks</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-50">
+                    @forelse($logs as $log)
+                        @php
+                            $action = $actionOf($log);
+                            $cfg = $actionConfig[$action] ?? ['bg-slate-100 text-slate-600', ucfirst($action ?: 'unknown'), 'fa-circle'];
+                            $loggerName = $log->logger->name ?? 'System';
+                            $remarks = trim((string) ($log->remarks ?? ''));
+                        @endphp
+                        <tr class="hover:bg-slate-50/50 transition">
+                            <td class="px-4 py-2 text-xs text-slate-400">{{ $loop->iteration }}</td>
+                            <td class="px-4 py-2 whitespace-nowrap">
+                                <span class="text-xs font-medium text-slate-600">{{ $log->created_at?->format('M d, Y') ?? '—' }}</span>
+                                <span class="text-xs text-slate-400 ml-1">{{ $log->created_at?->format('h:i A') }}</span>
+                            </td>
+                            <td class="px-4 py-2 text-xs font-semibold text-slate-800">
+                                {{ $log->eventEquipment->event->event_name ?? 'Deleted event' }}
+                            </td>
+                            <td class="px-4 py-2 text-xs text-slate-600">
+                                {{ $log->eventEquipment->equipmentItem->name ?? 'Deleted item' }}
+                            </td>
+                            <td class="px-4 py-2">
+                                <span class="badge inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap {{ $cfg[0] }}">
+                                    <i class="fas {{ $cfg[2] }} text-[9px]"></i> {{ $cfg[1] }}
+                                </span>
+                            </td>
+                            <td class="px-3 py-2 text-xs text-center font-bold text-slate-800">{{ (int) $log->quantity }}</td>
+                            <td class="px-4 py-2 text-xs text-slate-600 whitespace-nowrap">{{ $loggerName }}</td>
+                            <td class="px-4 py-2 text-xs text-slate-500">
+                                @if($remarks !== '')
+                                    {{-- shortened on screen, full text on paper --}}
+                                    <span class="no-print block max-w-[220px] truncate" title="{{ $remarks }}">{{ $remarks }}</span>
+                                    <span class="print-only">{{ $remarks }}</span>
+                                @else
+                                    <span class="text-slate-300">—</span>
+                                @endif
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="8" class="px-4 py-8 text-center text-slate-400">
+                                <i class="fas fa-clipboard-list text-2xl mb-2 text-slate-200 block no-print"></i>
+                                <p class="text-xs">No activity logs found for the selected filters.</p>
+                                @if($hasFilters)
+                                    <a href="{{ route('reports.equipment-logs') }}" class="text-amber-600 hover:underline text-xs inline-block mt-1 no-print">Clear filters</a>
+                                @endif
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    @if($logs instanceof \Illuminate\Pagination\AbstractPaginator)
+        <div class="mt-3 no-print">
+            {{ $logs->appends(request()->query())->links('pagination::tailwind') }}
+        </div>
+    @endif
+
+    {{-- ================= PRINT FOOTER ================= --}}
+    <div class="print-only signature-block" style="margin-top:24px;">
+        <table style="width:100%; font-size:10px; color:#0f172a;">
+            <tr>
+                <td style="width:50%; padding-right:24px;">
+                    <p>Prepared by:</p>
+                    <div style="margin-top:28px; border-top:1px solid #0f172a; width:220px; padding-top:3px;">
+                        <strong>{{ auth()->user()->name }}</strong><br>
+                        <span style="color:#475569; text-transform:capitalize;">{{ auth()->user()->role }}</span>
+                    </div>
+                </td>
+                <td style="width:50%;">
+                    <p>Noted by:</p>
+                    <div style="margin-top:28px; border-top:1px solid #0f172a; width:220px; padding-top:3px;">
+                        <strong>&nbsp;</strong><br>
+                        <span style="color:#475569;">Owner / Manager</span>
+                    </div>
+                </td>
+            </tr>
+        </table>
+
+        <p style="margin-top:16px; text-align:center; font-size:9px; color:#64748b;">
+            End of Report — {{ $summary['entries'] }} log {{ Str::plural('entry', $summary['entries']) }} &middot;
+            Steph's Catering by Chef Nono &copy; {{ date('Y') }} &middot; Confidential
+        </p>
+    </div>
+
+    <script>
+        (function () {
+            // Keep From <= To while picking dates
+            const from = document.getElementById('f-from');
+            const to = document.getElementById('f-to');
+            from.addEventListener('change', () => { to.min = from.value; });
+            to.addEventListener('change', () => { from.max = to.value; });
+        })();
+    </script>
 @endsection

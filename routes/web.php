@@ -31,7 +31,16 @@ Route::middleware(['auth'])->group(function () {
         if (!$waiter) {
             abort(403, 'Only waiters have a profile.');
         }
-        $waiter->load(['user', 'events', 'assignedEquipment.event']);
+        $waiter->load([
+            'user',
+            'region',
+            'province',
+            'city',
+            'barangay',
+            'events',
+            'assignedEquipment.event',
+            'assignedEquipment.equipmentItem',
+        ]);
         return view('waiters.my-profile', compact('waiter'));
     })->name('waiters.my-profile');
 
@@ -85,6 +94,14 @@ Route::middleware(['auth'])->group(function () {
 
         return back()->with('password_success', 'Password changed successfully!');
     })->name('waiters.change-password');
+
+    // Waiter change own email
+    Route::put('/my-profile/email', function (Request $request) {
+        if (!auth()->user()->waiter) {
+            abort(403, 'Only waiters can change their email here.');
+        }
+        return app(WaiterController::class)->updateMyEmail($request);
+    })->name('waiters.update-email');
 
     // ==================== ADMIN-ONLY ROUTES ====================
     Route::group([], function () {

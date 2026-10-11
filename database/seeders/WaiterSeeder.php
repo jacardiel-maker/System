@@ -12,19 +12,55 @@ class WaiterSeeder extends Seeder
     public function run(): void
     {
         $waiters = [
-            ['name' => 'Juan Dela Cruz', 'email' => 'juan@stephscatering.com', 'phone' => '09171234567', 'emergency' => '09181234567', 'address' => 'Brgy. Concepcion, Naga City, Camarines Sur'],
-            ['name' => 'Maria Santos', 'email' => 'maria@stephscatering.com', 'phone' => '09172345678', 'emergency' => '09182345678', 'address' => 'Brgy. San Felipe, Naga City, Camarines Sur'],
-            ['name' => 'Pedro Reyes', 'email' => 'pedro@stephscatering.com', 'phone' => '09173456789', 'emergency' => '09183456789', 'address' => 'Brgy. Dinaga, Naga City, Camarines Sur'],
-            ['name' => 'Ana Gonzaga', 'email' => 'ana@stephscatering.com', 'phone' => '09174567890', 'emergency' => '09184567890', 'address' => 'Brgy. San Francisco, Iriga City, Camarines Sur'],
-            ['name' => 'Carlo Bautista', 'email' => 'carlo@stephscatering.com', 'phone' => '09175678901', 'emergency' => '09185678901', 'address' => 'Brgy. San Juan, Pili, Camarines Sur'],
-            ['name' => 'Liza Mendoza', 'email' => 'liza@stephscatering.com', 'phone' => '09176789012', 'emergency' => '09186789012', 'address' => 'Brgy. La Purisima, Nabua, Camarines Sur'],
-            ['name' => 'Miguel Torres', 'email' => 'miguel@stephscatering.com', 'phone' => '09177890123', 'emergency' => '09187890123', 'address' => 'Brgy. San Jose, Baao, Camarines Sur'],
-            ['name' => 'Grace Villanueva', 'email' => 'grace@stephscatering.com', 'phone' => '09178901234', 'emergency' => '09188901234', 'address' => 'Brgy. Sagrada, Bula, Camarines Sur'],
-            ['name' => 'Ramon Castillo', 'email' => 'ramon@stephscatering.com', 'phone' => '09179012345', 'emergency' => '09189012345', 'address' => 'Brgy. San Lucas, Calabanga, Camarines Sur'],
-            ['name' => 'Diana Fernandez', 'email' => 'diana@stephscatering.com', 'phone' => '09170123456', 'emergency' => '09180123456', 'address' => 'Brgy. Bahay, Libmanan, Camarines Sur'],
+
+            [
+                'name' => 'Mark Anthony Bebonia',
+                'email' => 'markanthony@gmail.com',
+                'phone' => '09639385714279',
+                'emergency' => '639385714279',
+                'address' => 'San Esteban, Nabua, Camarines Sur, Bicol Region',
+                'date_hired' => '2023-11-10',
+            ],
+
+            [
+                'name' => 'James Cedie Sergio',
+                'email' => 'jamescedie@gmail.com',
+                'phone' => '09916246854',
+                'emergency' => '09916246854',
+                'address' => 'Masoli, Bato, Camarines Sur, Bicol Region',
+                'date_hired' => '2025-08-11',
+            ],
+
+            [
+                'name' => 'Sergio Sergio',
+                'email' => 'sergio@gmail.com',
+                'phone' => '09929691263',
+                'emergency' => '09929391263',
+                'address' => 'Masoli, Bato, Camarines Sur, Bicol Region',
+                'date_hired' => '2025-12-16',
+            ],
+
+            [
+                'name' => 'Ian Parma',
+                'email' => 'ian@gmail.com',
+                'phone' => '09918918720',
+                'emergency' => '09918918720',
+                'address' => 'Santa Lucia, Baras, Nabua, Camarines Sur, Bicol Region',
+                'date_hired' => '2026-02-16',
+            ],
+
+            [
+                'name' => 'Jan Benjie Cardiel',
+                'email' => 'janbenjie@gmail.com',
+                'phone' => '09916822804',
+                'emergency' => '09151450351',
+                'address' => 'Masoli, Bato, Camarines Sur, Bicol Region',
+                'date_hired' => '2025-12-16',
+            ],
         ];
 
         foreach ($waiters as $data) {
+
             $user = User::create([
                 'name' => $data['name'],
                 'email' => $data['email'],
@@ -37,11 +73,13 @@ class WaiterSeeder extends Seeder
                 'phone' => $data['phone'],
                 'emergency_contact' => $data['emergency'],
                 'address' => $data['address'],
-                'date_hired' => now()->subMonths(rand(1, 24))->subDays(rand(1, 30)),
+                'date_hired' => $data['date_hired'],
                 'status' => 'active',
             ]);
         }
 
-        $this->command->info('Created 10 waiters. Default password: stephscatering');
+        $this->command->info(
+            'Created 5 waiters. Default password: stephscatering'
+        );
     }
 }

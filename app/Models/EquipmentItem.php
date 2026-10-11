@@ -10,8 +10,13 @@ class EquipmentItem extends Model
     use HasFactory;
 
     protected $fillable = [
-        'category_id', 'name', 'serial_code', 'total_quantity',
-        'available_quantity', 'condition'
+        'category_id',
+        'name',
+        'serial_code',
+        'image',
+        'total_quantity',
+        'available_quantity',
+        'condition',
     ];
 
     public function category()
@@ -22,5 +27,11 @@ class EquipmentItem extends Model
     public function eventAllocations()
     {
         return $this->hasMany(EventEquipment::class);
+    }
+
+    /* ─── Helper: Image URL (null if no image) ─── */
+    public function getImageUrlAttribute(): ?string
+    {
+        return $this->image ? asset('storage/' . $this->image) : null;
     }
 }

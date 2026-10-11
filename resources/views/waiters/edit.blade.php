@@ -8,7 +8,9 @@
         <div class="flex items-center gap-2 text-sm text-slate-500 mb-2">
             <a href="{{ route('waiters.index') }}" class="hover:text-amber-700 transition-colors">Waiters</a>
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-            <span class="text-slate-900 font-medium truncate max-w-[200px]">{{ $waiter->user->name }}</span>
+            <a href="{{ route('waiters.show', $waiter) }}" class="hover:text-amber-700 transition-colors truncate max-w-[200px]">{{ $waiter->user->name }}</a>
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            <span class="text-slate-900 font-medium">Edit</span>
         </div>
         <h1 class="text-3xl font-bold text-slate-900 tracking-tight">Edit Waiter</h1>
         <p class="mt-1 text-sm text-slate-500">Update profile, address, and account settings</p>
@@ -60,7 +62,12 @@
         </div>
     @endif
 
-    <form action="{{ route('waiters.update', $waiter) }}" method="POST" class="space-y-6">
+    @php
+        $currentPhotoUrl = $waiter->photo ? asset('storage/' . $waiter->photo) : null;
+    @endphp
+
+    {{-- enctype is required for the photo upload --}}
+    <form action="{{ route('waiters.update', $waiter) }}" method="POST" enctype="multipart/form-data" class="space-y-6">
         @csrf
         @method('PUT')
 
@@ -76,6 +83,45 @@
             </div>
 
             <div class="p-6 space-y-5">
+                {{-- Photo --}}
+                <div class="flex flex-col sm:flex-row sm:items-center gap-4">
+                    <div class="relative shrink-0">
+                        <div id="photoPreviewWrap"
+                            class="w-24 h-24 rounded-2xl bg-slate-100 border-2 {{ $currentPhotoUrl ? 'border-transparent' : 'border-dashed' }} border-slate-300 flex items-center justify-center overflow-hidden @error('photo') border-rose-400 @enderror">
+                            <img id="photoPreview" src="{{ $currentPhotoUrl ?? '' }}" alt="{{ $waiter->user->name }}"
+                                class="{{ $currentPhotoUrl ? '' : 'hidden' }} w-full h-full object-cover">
+                            <span id="photoPlaceholder" class="{{ $currentPhotoUrl ? 'hidden' : '' }} text-3xl font-bold text-slate-400">
+                                {{ strtoupper(mb_substr($waiter->user->name, 0, 1)) }}
+                            </span>
+                        </div>
+                        <button type="button" id="photoRemove" aria-label="Remove photo" title="Remove photo"
+                            class="{{ $currentPhotoUrl ? '' : 'hidden' }} absolute -top-2 -right-2 w-6 h-6 rounded-full bg-white border border-slate-200 shadow-sm text-slate-500 hover:text-rose-600 flex items-center justify-center">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                    </div>
+                    <div class="space-y-1.5">
+                        <label class="block text-sm font-semibold text-slate-700">Photo <span class="text-slate-400 font-normal">(Optional)</span></label>
+                        <div class="flex items-center gap-2">
+                            <label for="photo"
+                                class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:border-amber-300 cursor-pointer transition-all">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                </svg>
+                                <span id="photoBtnText">{{ $currentPhotoUrl ? 'Change Photo' : 'Upload Photo' }}</span>
+                            </label>
+                            <button type="button" id="photoUndo"
+                                class="hidden text-xs font-semibold text-slate-500 hover:text-amber-700 px-2 py-1">
+                                Undo
+                            </button>
+                        </div>
+                        <input type="file" name="photo" id="photo" accept="image/jpeg,image/png,image/webp" class="sr-only">
+                        <input type="hidden" name="remove_photo" id="removePhoto" value="0">
+                        <p id="photoHint" class="text-xs text-slate-500">JPG, PNG or WEBP. Max 2MB.</p>
+                        @error('photo')<p class="text-xs text-rose-600 font-medium">{{ $message }}</p>@enderror
+                    </div>
+                </div>
+
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <div class="space-y-1.5">
                         <label class="block text-sm font-semibold text-slate-700">Full Name <span class="text-rose-500">*</span></label>
@@ -132,7 +178,7 @@
                                 class="w-full rounded-xl border-slate-200 bg-slate-50/50 px-4 py-2.5 text-sm text-slate-900 focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/20 transition-all appearance-none cursor-pointer @error('region_id') border-rose-500 focus:border-rose-500 focus:ring-rose-500/20 @enderror">
                                 <option value="">Select Region</option>
                                 @foreach($regions as $region)
-                                    <option value="{{ $region->region_id }}" {{ old('region_id', $waiter->region_id) == $region->region_id ? 'selected' : '' }}>
+                                    <option value="{{ $region->region_id }}" {{ (string) old('region_id', $waiter->region_id) === (string) $region->region_id ? 'selected' : '' }}>
                                         {{ $region->name }}
                                     </option>
                                 @endforeach
@@ -148,10 +194,10 @@
                         <label class="block text-sm font-semibold text-slate-700">Province <span class="text-rose-500">*</span></label>
                         <div class="relative">
                             <select name="province_id" id="province" required
-                                class="w-full rounded-xl border-slate-200 bg-slate-50/50 px-4 py-2.5 text-sm text-slate-900 focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/20 transition-all appearance-none cursor-pointer @error('province_id') border-rose-500 focus:border-rose-500 focus:ring-rose-500/20 @enderror">
+                                class="w-full rounded-xl border-slate-200 bg-slate-50/50 px-4 py-2.5 text-sm text-slate-900 focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/20 transition-all appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed @error('province_id') border-rose-500 focus:border-rose-500 focus:ring-rose-500/20 @enderror">
                                 <option value="">Select Province</option>
                                 @foreach($provinces as $prov)
-                                    <option value="{{ $prov->province_id }}" {{ old('province_id', $waiter->province_id) == $prov->province_id ? 'selected' : '' }}>
+                                    <option value="{{ $prov->province_id }}" {{ (string) old('province_id', $waiter->province_id) === (string) $prov->province_id ? 'selected' : '' }}>
                                         {{ $prov->name }}
                                     </option>
                                 @endforeach
@@ -167,10 +213,10 @@
                         <label class="block text-sm font-semibold text-slate-700">City / Municipality <span class="text-rose-500">*</span></label>
                         <div class="relative">
                             <select name="city_id" id="city" required
-                                class="w-full rounded-xl border-slate-200 bg-slate-50/50 px-4 py-2.5 text-sm text-slate-900 focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/20 transition-all appearance-none cursor-pointer @error('city_id') border-rose-500 focus:border-rose-500 focus:ring-rose-500/20 @enderror">
+                                class="w-full rounded-xl border-slate-200 bg-slate-50/50 px-4 py-2.5 text-sm text-slate-900 focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/20 transition-all appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed @error('city_id') border-rose-500 focus:border-rose-500 focus:ring-rose-500/20 @enderror">
                                 <option value="">Select City</option>
                                 @foreach($cities as $ct)
-                                    <option value="{{ $ct->city_id }}" {{ old('city_id', $waiter->city_id) == $ct->city_id ? 'selected' : '' }}>
+                                    <option value="{{ $ct->city_id }}" {{ (string) old('city_id', $waiter->city_id) === (string) $ct->city_id ? 'selected' : '' }}>
                                         {{ $ct->name }}
                                     </option>
                                 @endforeach
@@ -186,10 +232,10 @@
                         <label class="block text-sm font-semibold text-slate-700">Barangay <span class="text-rose-500">*</span></label>
                         <div class="relative">
                             <select name="barangay_code" id="barangay" required
-                                class="w-full rounded-xl border-slate-200 bg-slate-50/50 px-4 py-2.5 text-sm text-slate-900 focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/20 transition-all appearance-none cursor-pointer @error('barangay_code') border-rose-500 focus:border-rose-500 focus:ring-rose-500/20 @enderror">
+                                class="w-full rounded-xl border-slate-200 bg-slate-50/50 px-4 py-2.5 text-sm text-slate-900 focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/20 transition-all appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed @error('barangay_code') border-rose-500 focus:border-rose-500 focus:ring-rose-500/20 @enderror">
                                 <option value="">Select Barangay</option>
                                 @foreach($barangays as $brgy)
-                                    <option value="{{ $brgy->code }}" {{ old('barangay_code', $waiter->barangay_code) == $brgy->code ? 'selected' : '' }}>
+                                    <option value="{{ $brgy->code }}" {{ (string) old('barangay_code', $waiter->barangay_code) === (string) $brgy->code ? 'selected' : '' }}>
                                         {{ $brgy->name }}
                                     </option>
                                 @endforeach
@@ -226,19 +272,21 @@
             <div class="p-6 space-y-6">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <div class="space-y-1.5">
-                        <label class="block text-sm font-semibold text-slate-700">Date Hired</label>
-                        <input type="date" name="date_hired" value="{{ old('date_hired', $waiter->date_hired?->format('Y-m-d')) }}"
+                        <label class="block text-sm font-semibold text-slate-700">Date Hired <span class="text-rose-500">*</span></label>
+                        <input type="date" name="date_hired" value="{{ old('date_hired', $waiter->date_hired?->format('Y-m-d')) }}" required
+                            max="{{ now()->format('Y-m-d') }}"
                             class="w-full rounded-xl border-slate-200 bg-slate-50/50 px-4 py-2.5 text-sm text-slate-900 focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/20 transition-all @error('date_hired') border-rose-500 focus:border-rose-500 focus:ring-rose-500/20 @enderror">
                         @error('date_hired')<p class="text-xs text-rose-600 font-medium">{{ $message }}</p>@enderror
                     </div>
 
                     <div class="space-y-1.5">
-                        <label class="block text-sm font-semibold text-slate-700">Status</label>
+                        <label class="block text-sm font-semibold text-slate-700">Status <span class="text-rose-500">*</span></label>
                         <div class="relative">
+                            @php $currentStatus = strtolower((string) old('status', $waiter->status)); @endphp
                             <select name="status"
                                 class="w-full rounded-xl border-slate-200 bg-slate-50/50 px-4 py-2.5 text-sm text-slate-900 focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/20 transition-all appearance-none cursor-pointer @error('status') border-rose-500 focus:border-rose-500 focus:ring-rose-500/20 @enderror">
-                                <option value="active" {{ old('status', $waiter->status) === 'active' ? 'selected' : '' }}>Active</option>
-                                <option value="inactive" {{ old('status', $waiter->status) === 'inactive' ? 'selected' : '' }}>Inactive</option>
+                                <option value="active" {{ $currentStatus === 'active' ? 'selected' : '' }}>Active</option>
+                                <option value="inactive" {{ $currentStatus === 'inactive' ? 'selected' : '' }}>Inactive</option>
                             </select>
                             <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
@@ -261,10 +309,10 @@
                         <div class="space-y-1.5">
                             <label class="block text-sm font-semibold text-slate-700">New Password</label>
                             <div class="relative">
-                                <input type="password" name="password" id="adminNewPassword"
+                                <input type="password" name="password" id="adminNewPassword" minlength="8" autocomplete="new-password"
                                     class="w-full rounded-xl border-slate-200 bg-slate-50/50 px-4 py-2.5 pr-10 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/20 transition-all @error('password') border-rose-500 focus:border-rose-500 focus:ring-rose-500/20 @enderror"
                                     placeholder="••••••••">
-                                <button type="button" onclick="toggleEye('adminNewPassword', 'adminEye1')"
+                                <button type="button" onclick="toggleEye('adminNewPassword', 'adminEye1')" aria-label="Show password"
                                     class="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-amber-600 transition-colors focus:outline-none">
                                     <svg class="w-4 h-4" id="adminEye1-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
@@ -272,16 +320,17 @@
                                     </svg>
                                 </button>
                             </div>
+                            <p class="text-xs text-slate-400">Minimum 8 characters</p>
                             @error('password')<p class="text-xs text-rose-600 font-medium">{{ $message }}</p>@enderror
                         </div>
 
                         <div class="space-y-1.5">
                             <label class="block text-sm font-semibold text-slate-700">Confirm New Password</label>
                             <div class="relative">
-                                <input type="password" name="password_confirmation" id="adminConfirmPassword"
+                                <input type="password" name="password_confirmation" id="adminConfirmPassword" autocomplete="new-password"
                                     class="w-full rounded-xl border-slate-200 bg-slate-50/50 px-4 py-2.5 pr-10 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/20 transition-all"
                                     placeholder="••••••••">
-                                <button type="button" onclick="toggleEye('adminConfirmPassword', 'adminEye2')"
+                                <button type="button" onclick="toggleEye('adminConfirmPassword', 'adminEye2')" aria-label="Show password"
                                     class="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-amber-600 transition-colors focus:outline-none">
                                     <svg class="w-4 h-4" id="adminEye2-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
@@ -295,7 +344,7 @@
                     <button type="button" onclick="generateRandomPassword()"
                         class="mt-4 inline-flex items-center gap-2 text-sm font-medium text-amber-700 hover:text-amber-800 transition-colors">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                         </svg>
                         Generate random password
                     </button>
@@ -321,7 +370,89 @@
 </div>
 
 <script>
+    // ---------- Photo: upload / change / remove / undo ----------
+    (function () {
+        const input = document.getElementById('photo');
+        const preview = document.getElementById('photoPreview');
+        const placeholder = document.getElementById('photoPlaceholder');
+        const wrap = document.getElementById('photoPreviewWrap');
+        const removeBtn = document.getElementById('photoRemove');
+        const undoBtn = document.getElementById('photoUndo');
+        const removeFlag = document.getElementById('removePhoto');
+        const btnText = document.getElementById('photoBtnText');
+        const hint = document.getElementById('photoHint');
+        const originalUrl = @json($currentPhotoUrl);
+        const MAX_BYTES = 2 * 1024 * 1024;
+        const ALLOWED = ['image/jpeg', 'image/png', 'image/webp'];
+        const DEFAULT_HINT = 'JPG, PNG or WEBP. Max 2MB.';
+
+        function showImage(src) {
+            preview.src = src;
+            preview.classList.remove('hidden');
+            placeholder.classList.add('hidden');
+            wrap.classList.remove('border-dashed');
+            removeBtn.classList.remove('hidden');
+            btnText.textContent = 'Change Photo';
+        }
+
+        function showPlaceholder() {
+            preview.src = '';
+            preview.classList.add('hidden');
+            placeholder.classList.remove('hidden');
+            wrap.classList.add('border-dashed');
+            removeBtn.classList.add('hidden');
+            btnText.textContent = 'Upload Photo';
+        }
+
+        function setHint(text, isError) {
+            hint.textContent = text;
+            hint.className = 'text-xs ' + (isError ? 'text-rose-600 font-medium' : 'text-slate-500 truncate max-w-[220px]');
+        }
+
+        // Back to how the page loaded (current saved photo, or none)
+        function restoreOriginal() {
+            input.value = '';
+            removeFlag.value = '0';
+            undoBtn.classList.add('hidden');
+            originalUrl ? showImage(originalUrl) : showPlaceholder();
+            setHint(DEFAULT_HINT, false);
+        }
+
+        input.addEventListener('change', function () {
+            const file = this.files && this.files[0];
+            if (!file) return;
+
+            if (!ALLOWED.includes(file.type)) { restoreOriginal(); return setHint('Please choose a JPG, PNG or WEBP image.', true); }
+            if (file.size > MAX_BYTES) { restoreOriginal(); return setHint('Image is too large. Max 2MB.', true); }
+
+            const reader = new FileReader();
+            reader.onload = e => {
+                removeFlag.value = '0';
+                showImage(e.target.result);
+                setHint(file.name, false);
+                undoBtn.classList.toggle('hidden', !originalUrl);
+            };
+            reader.readAsDataURL(file);
+        });
+
+        removeBtn.addEventListener('click', function () {
+            input.value = '';
+            showPlaceholder();
+            if (originalUrl) {
+                removeFlag.value = '1';
+                setHint('Photo will be removed when you save.', false);
+                undoBtn.classList.remove('hidden');
+            } else {
+                setHint(DEFAULT_HINT, false);
+            }
+        });
+
+        undoBtn.addEventListener('click', restoreOriginal);
+    })();
+
+    // ---------- Address cascading dropdowns ----------
     document.addEventListener('DOMContentLoaded', function () {
+        const apiBase = @json(url('api'));
         const region = document.getElementById('region');
         const province = document.getElementById('province');
         const city = document.getElementById('city');
@@ -331,16 +462,22 @@
             select.innerHTML = `<option value="">${placeholder}</option>`;
         }
 
+        function fill(select, data) {
+            data.forEach(item => {
+                const o = document.createElement('option');
+                o.value = item.id;
+                o.textContent = item.name;
+                select.appendChild(o);
+            });
+        }
+
         region.addEventListener('change', function () {
             clearOptions(province, 'Select Province');
             clearOptions(city, 'Select City'); city.disabled = true;
             clearOptions(barangay, 'Select Barangay'); barangay.disabled = true;
             if (!this.value) { province.disabled = true; return; }
             province.disabled = false;
-            fetch(`/api/provinces/${this.value}`)
-                .then(r => r.json()).then(data => {
-                    data.forEach(p => { let o = document.createElement('option'); o.value = p.id; o.textContent = p.name; province.appendChild(o); });
-                });
+            fetch(`${apiBase}/provinces/${this.value}`).then(r => r.json()).then(data => fill(province, data));
         });
 
         province.addEventListener('change', function () {
@@ -348,37 +485,42 @@
             clearOptions(barangay, 'Select Barangay'); barangay.disabled = true;
             if (!this.value) { city.disabled = true; return; }
             city.disabled = false;
-            fetch(`/api/cities/${this.value}`)
-                .then(r => r.json()).then(data => {
-                    data.forEach(c => { let o = document.createElement('option'); o.value = c.id; o.textContent = c.name; city.appendChild(o); });
-                });
+            fetch(`${apiBase}/cities/${this.value}`).then(r => r.json()).then(data => fill(city, data));
         });
 
         city.addEventListener('change', function () {
             clearOptions(barangay, 'Select Barangay');
             if (!this.value) { barangay.disabled = true; return; }
             barangay.disabled = false;
-            fetch(`/api/barangays/${this.value}`)
-                .then(r => r.json()).then(data => {
-                    data.forEach(b => { let o = document.createElement('option'); o.value = b.id; o.textContent = b.name; barangay.appendChild(o); });
-                });
+            fetch(`${apiBase}/barangays/${this.value}`).then(r => r.json()).then(data => fill(barangay, data));
         });
     });
 
+    // ---------- Password ----------
     document.getElementById('changePasswordCheck').addEventListener('change', function () {
         document.getElementById('passwordFields').classList.toggle('hidden', !this.checked);
+        if (!this.checked) {
+            // Clear so a hidden half-typed password can't block the save
+            document.getElementById('adminNewPassword').value = '';
+            document.getElementById('adminConfirmPassword').value = '';
+        }
     });
 
     function generateRandomPassword() {
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
-        let password = '';
-        for (let i = 0; i < 12; i++) {
-            password += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%&*';
+        const values = new Uint32Array(12);
+        crypto.getRandomValues(values);
+        const password = Array.from(values, v => chars[v % chars.length]).join('');
+
         document.getElementById('changePasswordCheck').checked = true;
         document.getElementById('passwordFields').classList.remove('hidden');
-        document.getElementById('adminNewPassword').value = password;
-        document.getElementById('adminConfirmPassword').value = password;
+        const newPass = document.getElementById('adminNewPassword');
+        const confirmPass = document.getElementById('adminConfirmPassword');
+        newPass.value = password;
+        confirmPass.value = password;
+        // Show it so the admin can copy it before saving
+        newPass.type = 'text';
+        confirmPass.type = 'text';
     }
 
     function toggleEye(inputId, eyeId) {

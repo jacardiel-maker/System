@@ -3,131 +3,98 @@
 namespace Database\Seeders;
 
 use App\Models\Event;
-use App\Models\EquipmentItem;
 use App\Models\EventEquipment;
-use App\Models\EquipmentLog;
+use App\Models\EquipmentItem;
+use App\Models\Waiter;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 class EventEquipmentSeeder extends Seeder
 {
     public function run(): void
     {
-        $events = Event::with('waiters')->get();
-        $items = EquipmentItem::all();
-        $adminId = \App\Models\User::where('role', 'admin')->first()->id ?? 1;
+        $mark = Waiter::whereHas('user', function ($query) {
+            $query->where('email', 'markanthony@gmail.com');
+        })->firstOrFail();
 
-        $bar = $this->command->getOutput()->createProgressBar($events->count());
-        $bar->start();
+        $equipmentRequirements = [
+
+            100 => [
+                'Juice Dispenser' => 2,
+                'Silver Spoon and Fork' => 100,
+                'Serving Spoon' => 4,
+                'Serving Fork' => 1,
+                'Serving Tong' => 1,
+                'Water Jug' => 2,
+                'Round Dinner Plate' => 100,
+                'Highball Glass' => 100,
+                'Pitcher' => 2,
+                'Chafing Dish' => 6,
+                'Extension' => 1,
+                'Cooler / Styro' => 3,
+            ],
+
+            50 => [
+                'Juice Dispenser' => 2,
+                'Silver Spoon and Fork' => 50,
+                'Serving Spoon' => 3,
+                'Serving Fork' => 1,
+                'Serving Tong' => 1,
+                'Water Jug' => 2,
+                'Round Dinner Plate' => 50,
+                'Highball Glass' => 50,
+                'Pitcher' => 2,
+                'Chafing Dish' => 5,
+                'Extension' => 1,
+                'Cooler / Styro' => 3,
+            ],
+        ];
+
+        $events = Event::orderBy('event_date')->get();
 
         foreach ($events as $event) {
-            if ($event->waiters->isEmpty() || $event->status === 'cancelled') {
-                $bar->advance();
+
+            // Check if Mark is assigned to this event
+            $isAssigned = $event->waiters()
+                ->where('waiters.id', $mark->id)
+                ->exists();
+
+            if (!$isAssigned) {
                 continue;
             }
 
-            $numItems = rand(1, 5);
-            $selectedItems = $items->random(min($numItems, $items->count()));
+            $requirements = $equipmentRequirements[$event->guest_count] ?? [];
 
-            foreach ($selectedItems as $item) {
-                // Refresh to get latest available_quantity from DB
-                $item->refresh();
+            foreach ($requirements as $equipmentName => $quantity) {
 
-                $waiter = $event->waiters->random();
+                $equipment = EquipmentItem::where(
+                    'name',
+                    $equipmentName
+                )->firstOrFail();
 
-                // Allocate smaller amounts (5-30 max, respecting 20% of stock per event)
-                $maxAllowed = min($item->available_quantity, max(5, intval($item->total_quantity * 0.15)), 30);
-                if ($maxAllowed <= 0) continue;
-
-                $qtyAllocated = rand(5, $maxAllowed);
-
-                if ($event->status === 'completed') {
-                    $status = $this->randomReturnStatus();
-                } elseif ($event->status === 'ongoing') {
-                    $status = 'in_use';
-                } else {
-                    $status = 'allocated';
+                if ($equipment->total_quantity < $quantity) {
+                    throw new \Exception(
+                        "Not enough {$equipmentName} stock for {$event->name}."
+                    );
                 }
 
-                $qtyReturned = 0;
-                $qtyDamaged = 0;
-                $qtyMissing = 0;
-
-                if ($status === 'returned') {
-                    $qtyReturned = $qtyAllocated;
-                } elseif ($status === 'partially_returned') {
-                    $qtyReturned = rand(1, $qtyAllocated - 1);
-                    $qtyDamaged = rand(0, $qtyAllocated - $qtyReturned);
-                    $qtyMissing = $qtyAllocated - $qtyReturned - $qtyDamaged;
-                } elseif ($status === 'lost') {
-                    $qtyMissing = $qtyAllocated;
-                }
-
-                $allocation = EventEquipment::create([
+                EventEquipment::create([
                     'event_id' => $event->id,
-                    'equipment_item_id' => $item->id,
-                    'assigned_waiter_id' => $waiter->id,
-                    'quantity_allocated' => $qtyAllocated,
-                    'quantity_returned' => $qtyReturned,
-                    'quantity_damaged' => $qtyDamaged,
-                    'quantity_missing' => $qtyMissing,
-                    'status' => $status,
-                    'notes' => $status !== 'allocated' ? 'Recorded via seed data' : null,
-                    'returned_at' => in_array($status, ['returned', 'partially_returned', 'lost']) ? $event->event_date->addDays(rand(1, 3)) : null,
+                    'equipment_item_id' => $equipment->id,
+                    'assigned_waiter_id' => $mark->id,
+                    'quantity_allocated' => $quantity,
+                    'quantity_returned' => $quantity,
+                    'quantity_damaged' => 0,
+                    'quantity_missing' => 0,
+                    'status' => 'returned',
+                    'notes' => 'Equipment returned in good condition.',
+                    'returned_at' => $event->event_date,
                 ]);
-
-                $item->decrement('available_quantity', $qtyAllocated);
-
-                EquipmentLog::create([
-                    'event_equipment_id' => $allocation->id,
-                    'logged_by' => $adminId,
-                    'action' => 'allocated',
-                    'quantity' => $qtyAllocated,
-                    'remarks' => 'Initial allocation to ' . $waiter->user->name,
-                ]);
-
-                if ($qtyReturned > 0) {
-                    EquipmentLog::create([
-                        'event_equipment_id' => $allocation->id,
-                        'logged_by' => $adminId,
-                        'action' => 'returned',
-                        'quantity' => $qtyReturned,
-                        'remarks' => 'Good condition return',
-                    ]);
-                }
-                if ($qtyDamaged > 0) {
-                    EquipmentLog::create([
-                        'event_equipment_id' => $allocation->id,
-                        'logged_by' => $adminId,
-                        'action' => 'damaged',
-                        'quantity' => $qtyDamaged,
-                        'remarks' => 'Damaged during event',
-                    ]);
-                }
-                if ($qtyMissing > 0) {
-                    EquipmentLog::create([
-                        'event_equipment_id' => $allocation->id,
-                        'logged_by' => $adminId,
-                        'action' => 'missing',
-                        'quantity' => $qtyMissing,
-                        'remarks' => 'Not returned by waiter',
-                    ]);
-                }
             }
-
-            $bar->advance();
         }
 
-        $bar->finish();
-        $this->command->newLine();
-        $this->command->info('Created equipment allocations. Some stock remains available.');
-    }
-
-    private function randomReturnStatus(): string
-    {
-        $rand = rand(1, 100);
-        if ($rand <= 60) return 'returned';
-        if ($rand <= 85) return 'partially_returned';
-        if ($rand <= 95) return 'lost';
-        return 'in_use';
+        $this->command->info(
+            'Created equipment allocations for Mark Anthony Bebonia only.'
+        );
     }
 }

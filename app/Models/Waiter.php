@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;   // ← missing import
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -18,6 +18,7 @@ class Waiter extends Model
         'emergency_contact',
         'address',
         'date_hired',
+        'photo',
         'status',
         'region_id',
         'province_id',
@@ -66,6 +67,12 @@ class Waiter extends Model
     public function barangay(): BelongsTo
     {
         return $this->belongsTo(Barangay::class, 'barangay_code', 'code');
+    }
+
+    /* ─── Helper: Photo URL (null if no photo) ─── */
+    public function getPhotoUrlAttribute(): ?string
+    {
+        return $this->photo ? asset('storage/' . $this->photo) : null;
     }
 
     /* ─── Helper: Full formatted address ─── */

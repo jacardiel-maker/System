@@ -9,7 +9,9 @@ use App\Models\Region;
 use App\Models\User;
 use App\Models\Waiter;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 
 class WaiterController extends Controller
 {
@@ -18,12 +20,15 @@ class WaiterController extends Controller
         $query = Waiter::with('user');
 
         // Search by name, email, or phone
+        // (wrapped in one group so the OR doesn't bypass the status/date filters below)
         if ($request->filled('search')) {
             $search = $request->search;
-            $query->whereHas('user', function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%");
-            })->orWhere('phone', 'like', "%{$search}%");
+            $query->where(function ($q) use ($search) {
+                $q->whereHas('user', function ($u) use ($search) {
+                    $u->where('name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%");
+                })->orWhere('phone', 'like', "%{$search}%");
+            });
         }
 
         // Filter by status
@@ -58,40 +63,64 @@ class WaiterController extends Controller
             'phone' => 'required|string|max:20',
             'emergency_contact' => 'nullable|string|max:20',
             'address' => 'nullable|string',
-            'date_hired' => 'nullable|date',
-            'password' => 'required|string|min:6|confirmed',
+            'date_hired' => 'required|date|before_or_equal:today',
+            'photo' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'password' => 'required|string|min:8|confirmed',
             'region_id' => 'required|string|exists:regions,region_id',
             'province_id' => 'required|string|exists:provinces,province_id',
             'city_id' => 'required|string|exists:cities,city_id',
             'barangay_code' => 'required|string|exists:barangays,code',
+        ], [
+            'date_hired.required' => 'Please enter the date hired.',
+            'date_hired.before_or_equal' => 'Date hired cannot be in the future.',
+            'photo.image' => 'The photo must be an image.',
+            'photo.max' => 'The photo must not be larger than 2MB.',
         ]);
 
-        $user = User::create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'password' => Hash::make($validated['password']),
-            'role' => 'waiter',
-        ]);
+        $photoPath = $request->hasFile('photo')
+            ? $request->file('photo')->store('waiters', 'public')
+            : null;
 
-        Waiter::create([
-            'user_id' => $user->id,
-            'phone' => $validated['phone'],
-            'emergency_contact' => $validated['emergency_contact'] ?? null,
-            'address' => $validated['address'] ?? null,
-            'date_hired' => $validated['date_hired'] ?? null,
-            'status' => 'active',
-            'region_id' => $validated['region_id'],
-            'province_id' => $validated['province_id'],
-            'city_id' => $validated['city_id'],
-            'barangay_code' => $validated['barangay_code'],
-        ]);
+        try {
+            DB::transaction(function () use ($validated, $photoPath) {
+                $user = User::create([
+                    'name' => $validated['name'],
+                    'email' => $validated['email'],
+                    'password' => Hash::make($validated['password']),
+                    'role' => 'waiter',
+                ]);
+
+                Waiter::create([
+                    'user_id' => $user->id,
+                    'phone' => $validated['phone'],
+                    'emergency_contact' => $validated['emergency_contact'] ?? null,
+                    'address' => $validated['address'] ?? null,
+                    'date_hired' => $validated['date_hired'],
+                    'photo' => $photoPath,
+                    'status' => 'active',
+                    'region_id' => $validated['region_id'],
+                    'province_id' => $validated['province_id'],
+                    'city_id' => $validated['city_id'],
+                    'barangay_code' => $validated['barangay_code'],
+                ]);
+            });
+        } catch (\Throwable $e) {
+            // Don't leave an orphan image behind if saving failed
+            if ($photoPath) {
+                Storage::disk('public')->delete($photoPath);
+            }
+            throw $e;
+        }
 
         return redirect()->route('waiters.index')->with('success', 'Waiter added successfully.');
     }
 
     public function show(Waiter $waiter)
     {
-        $waiter->load(['user', 'region', 'province', 'city', 'barangay', 'events']);
+        $waiter->load([
+            'user', 'region', 'province', 'city', 'barangay', 'events',
+            'assignedEquipment.event', 'assignedEquipment.equipmentItem',
+        ]);
         return view('waiters.show', compact('waiter'));
     }
 
@@ -113,13 +142,20 @@ class WaiterController extends Controller
             'phone' => 'required|string|max:20',
             'emergency_contact' => 'nullable|string|max:20',
             'address' => 'nullable|string',
-            'date_hired' => 'nullable|date',
+            'date_hired' => 'required|date|before_or_equal:today',
+            'photo' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'remove_photo' => 'nullable|boolean',
             'status' => 'required|in:active,inactive',
             'region_id' => 'required|string|exists:regions,region_id',
             'province_id' => 'required|string|exists:provinces,province_id',
             'city_id' => 'required|string|exists:cities,city_id',
             'barangay_code' => 'required|string|exists:barangays,code',
-            'password' => 'nullable|string|min:6|confirmed',
+            'password' => 'nullable|string|min:8|confirmed',
+        ], [
+            'date_hired.required' => 'Please enter the date hired.',
+            'date_hired.before_or_equal' => 'Date hired cannot be in the future.',
+            'photo.image' => 'The photo must be an image.',
+            'photo.max' => 'The photo must not be larger than 2MB.',
         ]);
 
         $waiter->user->update([
@@ -131,7 +167,7 @@ class WaiterController extends Controller
             'phone' => $validated['phone'],
             'emergency_contact' => $validated['emergency_contact'] ?? null,
             'address' => $validated['address'] ?? null,
-            'date_hired' => $validated['date_hired'] ?? null,
+            'date_hired' => $validated['date_hired'],
             'status' => $validated['status'],
             'region_id' => $validated['region_id'],
             'province_id' => $validated['province_id'],
@@ -139,18 +175,38 @@ class WaiterController extends Controller
             'barangay_code' => $validated['barangay_code'],
         ];
 
-        if (!empty($validated['password'])) {
+        // Photo: replace with a new upload, or remove the current one
+        $oldPhoto = $waiter->photo;
+        if ($request->hasFile('photo')) {
+            $waiterData['photo'] = $request->file('photo')->store('waiters', 'public');
+        } elseif ($request->boolean('remove_photo')) {
+            $waiterData['photo'] = null;
+        }
+
+        if ($request->boolean('change_password') && !empty($validated['password'])) {
             $waiter->user->update(['password' => Hash::make($validated['password'])]);
         }
 
         $waiter->update($waiterData);
+
+        // Delete the old file only after the new data saved successfully
+        if (array_key_exists('photo', $waiterData) && $oldPhoto && $oldPhoto !== $waiterData['photo']) {
+            Storage::disk('public')->delete($oldPhoto);
+        }
 
         return redirect()->route('waiters.show', $waiter)->with('success', 'Waiter updated successfully.');
     }
 
     public function destroy(Waiter $waiter)
     {
+        $photo = $waiter->photo;
+
         $waiter->user->delete(); // cascades or handles via foreign key
+
+        if ($photo) {
+            Storage::disk('public')->delete($photo);
+        }
+
         return redirect()->route('waiters.index')->with('success', 'Waiter deleted.');
     }
 
@@ -167,6 +223,31 @@ class WaiterController extends Controller
         ])->firstOrFail();
 
         return view('waiters.my-profile', compact('waiter'));
+    }
+
+    /**
+     * Logged-in waiter changes their own login email (from My Profile).
+     * Requires the current password so someone at an unlocked screen can't hijack the account.
+     */
+    public function updateMyEmail(Request $request)
+    {
+        $user = $request->user();
+
+        $validated = $request->validateWithBag('updateEmail', [
+            'email' => 'required|email|max:255|unique:users,email,' . $user->id,
+            'current_password' => 'required|current_password',
+        ], [
+            'email.unique' => 'That email is already used by another account.',
+            'current_password.current_password' => 'Your current password is incorrect.',
+        ]);
+
+        if (strcasecmp($validated['email'], $user->email) === 0) {
+            return redirect()->route('waiters.my-profile')->with('email_success', 'No changes — that is already your email.');
+        }
+
+        $user->update(['email' => $validated['email']]);
+
+        return redirect()->route('waiters.my-profile')->with('email_success', 'Your email has been updated.');
     }
 
     /* ─── AJAX Cascading Dropdowns ─── */
