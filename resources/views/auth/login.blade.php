@@ -86,7 +86,7 @@
     <!-- Footer -->
     <div class="text-center mt-6">
         <p class="text-xs text-slate-500">
-            &copy; {{ date('Y') }} E. Handog. All rights reserved.
+            &copy; {{ date('Y') }} E Serve. All rights reserved.
         </p>
     </div>
 
