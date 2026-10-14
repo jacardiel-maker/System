@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
-    <title>@yield('title', 'E-Handog')</title>
+    <title>@yield('title', 'E-Serve')</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
 
@@ -360,11 +360,12 @@
 
                 </div>
 
-                <form method="POST" action="{{ route('logout') }}">
+                <form id="logoutForm" method="POST" action="{{ route('logout') }}">
 
                     @csrf
 
-                    <button type="submit"
+                    {{-- Opens a confirmation first; the form is submitted from the modal --}}
+                    <button type="button" onclick="openLogoutModal()"
                         class="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 transition">
 
                         <i class="fas fa-sign-out-alt"></i>
@@ -453,6 +454,59 @@
 
     </div>
 
+    {{-- Logout Confirmation Modal --}}
+    <div id="logoutModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-[60] no-print"
+        role="dialog" aria-modal="true" aria-labelledby="logoutTitle">
+        <div class="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4">
+            <div class="text-center mb-5">
+                <div class="w-14 h-14 rounded-full mx-auto mb-3 flex items-center justify-center bg-red-100 text-red-600">
+                    <i class="fas fa-sign-out-alt text-xl"></i>
+                </div>
+                <h3 id="logoutTitle" class="text-lg font-bold text-slate-900 mb-1">Log out?</h3>
+                <p class="text-slate-500 text-sm">
+                    You are signed in as <span class="font-semibold text-slate-700">{{ auth()->user()->name }}</span>.
+                    You'll need to log in again to continue.
+                </p>
+            </div>
+            <div class="flex gap-3">
+                <button type="button" onclick="closeLogoutModal()"
+                    class="flex-1 px-4 py-2.5 border border-slate-300 text-slate-700 rounded-xl hover:bg-slate-50 font-medium transition">
+                    Cancel
+                </button>
+                <button type="button" id="logoutConfirmBtn"
+                    class="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition">
+                    Yes, Log out
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            const modal = document.getElementById('logoutModal');
+            const confirmBtn = document.getElementById('logoutConfirmBtn');
+
+            window.openLogoutModal = function () {
+                modal.classList.remove('hidden');
+                confirmBtn.focus();
+            };
+            window.closeLogoutModal = function () {
+                modal.classList.add('hidden');
+            };
+
+            confirmBtn.addEventListener('click', function () {
+                this.disabled = true;
+                this.textContent = 'Logging out...';
+                document.getElementById('logoutForm').submit();
+            });
+
+            modal.addEventListener('click', e => { if (e.target === modal) window.closeLogoutModal(); });
+            document.addEventListener('keydown', e => {
+                if (e.key === 'Escape' && !modal.classList.contains('hidden')) window.closeLogoutModal();
+            });
+        })();
+    </script>
+
     {{-- Equipment dropdown toggle --}}
     <script>
         (function () {
@@ -469,7 +523,7 @@
                 toggle.setAttribute('aria-expanded', String(!isOpen));
             });
         })();
-    </script>
+    </script>   
 
 </body>
 
