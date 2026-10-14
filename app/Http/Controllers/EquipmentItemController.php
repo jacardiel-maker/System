@@ -10,8 +10,11 @@ use Illuminate\Support\Facades\Storage;
 
 class EquipmentItemController extends Controller
 {
-    /** Below this many available units, an item counts as "Low Stock" (matches the badge on the list). */
-    private const LOW_STOCK_THRESHOLD = 5;
+    /**
+     * An item is "Low Stock" when its available quantity is below this percentage of its total
+     * (e.g. 15 of 100 = 15% → Low Stock). Matches test case TC-INV-A06 in Chapter 3.
+     */
+    private const LOW_STOCK_PERCENT = 20;
 
     public function index(Request $request)
     {
@@ -40,8 +43,9 @@ class EquipmentItemController extends Controller
         if ($request->filled('stock')) {
             switch ($request->stock) {
                 case 'low':
+                    // available / total < 20%  →  available * 100 < total * 20
                     $query->where('available_quantity', '>', 0)
-                        ->where('available_quantity', '<', self::LOW_STOCK_THRESHOLD);
+                        ->whereRaw('available_quantity * 100 < total_quantity * ?', [self::LOW_STOCK_PERCENT]);
                     break;
                 case 'out':
                     $query->where('available_quantity', '<=', 0);

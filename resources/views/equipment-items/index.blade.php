@@ -4,7 +4,7 @@
 @section('content')
     @php
         $categories = \App\Models\EquipmentCategory::orderBy('name')->get();
-        $lowStockThreshold = 5;
+        $lowStockPercent = 20; // Low Stock = available below 20% of total (TC-INV-A06)
 
         $conditionStyles = [
             'new'     => 'bg-emerald-50 text-emerald-600',
@@ -138,7 +138,7 @@
             of <span class="font-semibold text-slate-700">{{ $items->total() }}</span> items
         </p>
         <div class="flex items-center gap-3 text-[11px] text-slate-400">
-            <span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-red-500"></span> Out / Low (&lt; {{ $lowStockThreshold }})</span>
+            <span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-red-500"></span> Out / Low (&lt; {{ $lowStockPercent }}% of total)</span>
             <span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-500"></span> Below 50%</span>
             <span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-500"></span> Healthy</span>
         </div>
@@ -164,7 +164,7 @@
                             $total = (int) $item->total_quantity;
                             $pct = $total > 0 ? max(0, min(100, ($available / $total) * 100)) : 0;
                             $isOut = $available <= 0;
-                            $isLow = !$isOut && $available < $lowStockThreshold;
+                            $isLow = !$isOut && $total > 0 && ($available * 100) < ($total * $lowStockPercent);
 
                             $barColor = ($isOut || $isLow || $pct < 20) ? 'bg-red-500' : ($pct < 50 ? 'bg-amber-500' : 'bg-emerald-500');
 

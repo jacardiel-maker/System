@@ -4,10 +4,12 @@
 @section('content')
     @php
         $imageUrl = $equipmentCategory->image ? asset('storage/' . $equipmentCategory->image) : null;
-        $lowStockThreshold = 5;
+        $lowStockPercent = 20; // Low Stock = available below 20% of total (TC-INV-A06)
         $items = $equipmentCategory->items;
 
-        $lowCount = $items->filter(fn ($i) => (int) $i->available_quantity < $lowStockThreshold)->count();
+        // Items that are out of stock or below 20% of their total
+        $lowCount = $items->filter(fn ($i) => (int) $i->total_quantity > 0
+            && ((int) $i->available_quantity * 100) < ((int) $i->total_quantity * $lowStockPercent))->count();
         $totalUnits = (int) $items->sum('total_quantity');
         $availableUnits = (int) $items->sum('available_quantity');
 
@@ -35,6 +37,10 @@
             </div>
         </div>
         <div class="flex items-center gap-2 shrink-0">
+            <a href="{{ route('equipment-categories.index') }}"
+                class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition">
+                <i class="fas fa-arrow-left text-xs"></i> Back
+            </a>
             <a href="{{ route('equipment-categories.edit', $equipmentCategory) }}"
                 class="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 transition">
                 <i class="fas fa-pen text-xs"></i> Edit
@@ -90,7 +96,7 @@
                         </div>
                         <div class="rounded-lg bg-slate-50 py-1.5">
                             <p class="text-sm font-bold {{ $lowCount ? 'text-red-600' : 'text-emerald-600' }}">{{ $lowCount }}</p>
-                            <p class="text-[10px] text-slate-400">Low Stock</p>
+                            <p class="text-[10px] text-slate-400">Low / Out</p>
                         </div>
                     </div>
                 </div>
@@ -118,7 +124,7 @@
                                 $available = (int) $item->available_quantity;
                                 $total = (int) $item->total_quantity;
                                 $isOut = $available <= 0;
-                                $isLow = !$isOut && $available < $lowStockThreshold;
+                                $isLow = !$isOut && $total > 0 && ($available * 100) < ($total * $lowStockPercent);
                                 $pct = $total > 0 ? max(0, min(100, ($available / $total) * 100)) : 0;
                                 $bar = ($isOut || $isLow || $pct < 20) ? 'bg-red-500' : ($pct < 50 ? 'bg-amber-500' : 'bg-emerald-500');
                                 $cond = strtolower(trim((string) $item->condition));

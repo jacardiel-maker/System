@@ -83,6 +83,11 @@
                 ->limit(5)
                 ->pluck('total', 'name')
                 ->toArray();
+
+            // Same rule as the Equipment Items "Low Stock" filter: available below 20% of total
+            $lowStockCount = \App\Models\EquipmentItem::where('available_quantity', '>', 0)
+                ->whereRaw('available_quantity * 100 < total_quantity * 20')
+                ->count();
         @endphp
 
         <div class="flex flex-col gap-3 lg:h-[calc(100vh-2rem)] lg:min-h-[560px]">
@@ -97,7 +102,7 @@
                 <div class="flex items-center gap-2 shrink-0">
                     {{-- Notification Bell (desktop only; on mobile it lives in the top bar) --}}
                     <a href="{{ route('notifications.index') }}"
-                        class="hidden md:flex relative w-11 h-11 items-center justify-center bg-white rounded-xl shadow-sm border border-slate-200 text-slate-500 hover:text-amber-600 hover:shadow-md transition-all">
+                        class="hidden md:flex relative w-11 h-11 items-center justify-center bg-white rounded-xl shadow-sm border border-slate-100 text-slate-500 hover:text-amber-600 hover:shadow-md transition-all">
                         <i class="fas fa-bell"></i>
                         @if(auth()->user()->unreadNotifications->count() > 0)
                             <span
@@ -108,7 +113,7 @@
                     </a>
 
                     {{-- Live Clock --}}
-                    <div class="inline-flex items-center gap-2.5 bg-white rounded-xl shadow-sm border border-slate-200 px-3 h-11">
+                    <div class="inline-flex items-center gap-2.5 bg-white rounded-xl shadow-sm border border-slate-100 px-3 h-11">
                         <div class="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center text-amber-600">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -125,7 +130,7 @@
 
             {{-- ROW B: stat cards --}}
             <div class="shrink-0 grid grid-cols-2 lg:grid-cols-4 gap-3">
-                <div class="bg-white rounded-xl px-3 py-2 shadow-sm border border-slate-200 flex items-center gap-3">
+                <a href="{{ route('events.index') }}" class="group bg-white rounded-xl px-3 py-2 shadow-sm border border-slate-100 flex items-center gap-3 hover:border-amber-200 hover:shadow-md transition">
                     <div class="w-9 h-9 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -136,9 +141,10 @@
                         <div class="text-xl font-bold text-slate-900 leading-none">{{ $stats['total_events'] }}</div>
                         <div class="text-[11px] text-slate-500 font-medium mt-1 truncate">Total Events</div>
                     </div>
-                </div>
+                    <i class="fas fa-chevron-right text-[10px] text-slate-300 group-hover:text-amber-500 ml-auto transition"></i>
+                </a>
 
-                <div class="bg-white rounded-xl px-3 py-2 shadow-sm border border-slate-200 flex items-center gap-3">
+                <a href="{{ route('events.index', ['status' => 'scheduled']) }}" class="group bg-white rounded-xl px-3 py-2 shadow-sm border border-slate-100 flex items-center gap-3 hover:border-amber-200 hover:shadow-md transition">
                     <div class="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -149,9 +155,10 @@
                         <div class="text-xl font-bold text-slate-900 leading-none">{{ $stats['upcoming_events'] }}</div>
                         <div class="text-[11px] text-slate-500 font-medium mt-1 truncate">Upcoming Events</div>
                     </div>
-                </div>
+                    <i class="fas fa-chevron-right text-[10px] text-slate-300 group-hover:text-amber-500 ml-auto transition"></i>
+                </a>
 
-                <div class="bg-white rounded-xl px-3 py-2 shadow-sm border border-slate-200 flex items-center gap-3">
+                <a href="{{ route('waiters.index') }}" class="group bg-white rounded-xl px-3 py-2 shadow-sm border border-slate-100 flex items-center gap-3 hover:border-amber-200 hover:shadow-md transition">
                     <div class="w-9 h-9 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -162,9 +169,10 @@
                         <div class="text-xl font-bold text-slate-900 leading-none">{{ $stats['total_waiters'] }}</div>
                         <div class="text-[11px] text-slate-500 font-medium mt-1 truncate">Active Waiters</div>
                     </div>
-                </div>
+                    <i class="fas fa-chevron-right text-[10px] text-slate-300 group-hover:text-amber-500 ml-auto transition"></i>
+                </a>
 
-                <div class="bg-white rounded-xl px-3 py-2 shadow-sm border border-slate-200 flex items-center gap-3">
+                <a href="{{ route('equipment-items.index', ['stock' => 'low']) }}" class="group bg-white rounded-xl px-3 py-2 shadow-sm border border-slate-100 flex items-center gap-3 hover:border-amber-200 hover:shadow-md transition">
                     <div class="w-9 h-9 rounded-lg bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -172,21 +180,25 @@
                         </svg>
                     </div>
                     <div class="min-w-0">
-                        <div class="text-xl font-bold text-slate-900 leading-none">{{ $stats['low_stock_items'] }}</div>
+                        <div class="text-xl font-bold text-slate-900 leading-none">{{ $lowStockCount }}</div>
                         <div class="text-[11px] text-slate-500 font-medium mt-1 truncate">Low Stock Items</div>
                     </div>
-                </div>
+                    <i class="fas fa-chevron-right text-[10px] text-slate-300 group-hover:text-amber-500 ml-auto transition"></i>
+                </a>
             </div>
 
             {{-- ROW C: upcoming events (left) + calendar (right) --}}
             <div class="lg:flex-1 lg:min-h-0 grid grid-cols-1 lg:grid-cols-12 lg:grid-rows-[minmax(0,1fr)] gap-3">
 
                 {{-- Upcoming Events --}}
-                <div class="lg:col-span-4 lg:min-h-0 max-h-[360px] lg:max-h-none bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+                <div class="lg:col-span-4 lg:min-h-0 max-h-[360px] lg:max-h-none bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden flex flex-col">
                     <div class="shrink-0 px-4 py-2.5 border-b border-slate-100 flex justify-between items-center gap-2">
-                        <div class="min-w-0">
-                            <h2 class="text-base font-bold text-slate-900 leading-tight">Upcoming Events</h2>
-                            <p class="text-[11px] text-slate-500">Scheduled in the near future</p>
+                        <div class="min-w-0 flex items-center gap-2">
+                            <span class="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 inline-flex items-center justify-center shrink-0"><i class="fas fa-calendar-day text-xs"></i></span>
+                            <div class="min-w-0">
+                                <h2 class="text-sm font-bold text-slate-900 leading-tight">Upcoming Events</h2>
+                                <p class="text-[11px] text-slate-500">Scheduled in the near future</p>
+                            </div>
                         </div>
                         <a href="{{ route('events.create') }}"
                             class="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-amber-700 transition-all">
@@ -235,19 +247,19 @@
                 </div>
 
                 {{-- Calendar --}}
-                <div class="lg:col-span-8 lg:min-h-0 fit-cal bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+                <div class="lg:col-span-8 lg:min-h-0 fit-cal bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden flex flex-col">
                     <div class="shrink-0 px-4 py-2 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                        <h2 class="text-base font-bold text-slate-900">Event Calendar</h2>
+                        <div class="flex items-center gap-2"><span class="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 inline-flex items-center justify-center shrink-0"><i class="fas fa-calendar-alt text-xs"></i></span><h2 class="text-sm font-bold text-slate-900">Event Calendar</h2></div>
                         <div class="flex items-center gap-2">
-                            <select id="calendarView" onchange="calendarSetView(this.value)" class="text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg px-2 py-1.5 bg-white hover:bg-slate-50 cursor-pointer">
+                            <select id="calendarView" onchange="calendarSetView(this.value)" class="h-8 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg px-2 bg-white hover:bg-slate-50 cursor-pointer">
                                 <option value="month">Month</option>
                                 <option value="week">Week</option>
                                 <option value="day">Day</option>
                             </select>
-                            <button type="button" onclick="calendarToday()" class="px-3 py-1.5 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">Today</button>
-                            <button type="button" onclick="calendarPrev()" class="w-8 h-8 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">‹</button>
-                            <button type="button" onclick="calendarNext()" class="w-8 h-8 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">›</button>
-                            <div id="calendarMonthLabel" class="min-w-[150px] text-center text-sm font-bold text-slate-800"></div>
+                            <button type="button" onclick="calendarToday()" class="h-8 px-3 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">Today</button>
+                            <button type="button" onclick="calendarPrev()" class="w-8 h-8 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50" aria-label="Previous"><i class="fas fa-chevron-left text-xs"></i></button>
+                            <button type="button" onclick="calendarNext()" class="w-8 h-8 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50" aria-label="Next"><i class="fas fa-chevron-right text-xs"></i></button>
+                            <div id="calendarMonthLabel" class="min-w-[140px] text-right text-sm font-bold text-slate-800"></div>
                         </div>
                     </div>
 
@@ -272,9 +284,9 @@
             {{-- ROW D: charts --}}
             <div class="shrink-0 grid grid-cols-2 lg:grid-cols-7 gap-3 lg:h-[165px]">
                 {{-- Events Trend --}}
-                <div class="col-span-2 bg-white rounded-xl p-3 shadow-sm border border-slate-200 h-[190px] lg:h-full flex flex-col">
+                <div class="col-span-2 bg-white rounded-xl p-3 shadow-sm border border-slate-100 h-[190px] lg:h-full flex flex-col">
                     <div class="shrink-0 flex items-center justify-between gap-2 mb-1">
-                        <h2 class="text-xs font-bold text-slate-900">Events Trend</h2>
+                        <h2 class="text-xs font-bold text-slate-700 uppercase tracking-wide">Events Trend</h2>
                         <select onchange="updateEventsTrend(this.value)" class="text-[10px] font-semibold border border-slate-200 rounded-md px-1.5 py-0.5 text-slate-600 bg-white">
                             <option value="monthly">Monthly</option>
                             <option value="weekly">Weekly</option>
@@ -284,26 +296,26 @@
                 </div>
 
                 {{-- Event Status --}}
-                <div class="bg-white rounded-xl p-3 shadow-sm border border-slate-200 h-[190px] lg:h-full flex flex-col">
-                    <h2 class="shrink-0 text-xs font-bold text-slate-900 mb-1">Event Status</h2>
+                <div class="bg-white rounded-xl p-3 shadow-sm border border-slate-100 h-[190px] lg:h-full flex flex-col">
+                    <h2 class="shrink-0 text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">Event Status</h2>
                     <div class="relative flex-1 min-h-0"><canvas id="statusChart"></canvas></div>
                 </div>
 
                 {{-- Equipment by Category --}}
-                <div class="bg-white rounded-xl p-3 shadow-sm border border-slate-200 h-[190px] lg:h-full flex flex-col">
-                    <h2 class="shrink-0 text-xs font-bold text-slate-900 mb-1">Equipment by Category</h2>
+                <div class="bg-white rounded-xl p-3 shadow-sm border border-slate-100 h-[190px] lg:h-full flex flex-col">
+                    <h2 class="shrink-0 text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">Equipment by Category</h2>
                     <div class="relative flex-1 min-h-0"><canvas id="categoryChart"></canvas></div>
                 </div>
 
                 {{-- Equipment Condition --}}
-                <div class="bg-white rounded-xl p-3 shadow-sm border border-slate-200 h-[190px] lg:h-full flex flex-col">
-                    <h2 class="shrink-0 text-xs font-bold text-slate-900 mb-1">Equipment Condition</h2>
+                <div class="bg-white rounded-xl p-3 shadow-sm border border-slate-100 h-[190px] lg:h-full flex flex-col">
+                    <h2 class="shrink-0 text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">Equipment Condition</h2>
                     <div class="relative flex-1 min-h-0"><canvas id="conditionChart"></canvas></div>
                 </div>
 
                 {{-- Most Used Equipment --}}
-                <div class="col-span-2 lg:col-span-2 bg-white rounded-xl p-3 shadow-sm border border-slate-200 h-[190px] lg:h-full flex flex-col">
-                    <h2 class="shrink-0 text-xs font-bold text-slate-900 mb-1">Most Used Equipment</h2>
+                <div class="col-span-2 lg:col-span-2 bg-white rounded-xl p-3 shadow-sm border border-slate-100 h-[190px] lg:h-full flex flex-col">
+                    <h2 class="shrink-0 text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">Most Used Equipment</h2>
                     <div class="relative flex-1 min-h-0"><canvas id="topEquipmentChart"></canvas></div>
                 </div>
             </div>
@@ -397,7 +409,7 @@
                     data: {
                         labels: {!! json_encode(array_keys($topEquipment)) !!},
                         datasets: [{
-                            label: 'Times Allocated',
+                            label: 'Units Allocated',
                             data: {!! json_encode(array_values($topEquipment)) !!},
                             backgroundColor: '#d97706',
                             borderRadius: 4
@@ -484,7 +496,7 @@
                 <div class="flex items-center gap-2 shrink-0">
                     {{-- Notification Bell (desktop only; on mobile it lives in the top bar) --}}
                     <a href="{{ route('notifications.index') }}"
-                        class="hidden md:flex relative w-11 h-11 items-center justify-center bg-white rounded-xl shadow-sm border border-slate-200 text-slate-500 hover:text-amber-600 hover:shadow-md transition-all">
+                        class="hidden md:flex relative w-11 h-11 items-center justify-center bg-white rounded-xl shadow-sm border border-slate-100 text-slate-500 hover:text-amber-600 hover:shadow-md transition-all">
                         <i class="fas fa-bell"></i>
                         @if(auth()->user()->unreadNotifications->count() > 0)
                             <span
@@ -495,7 +507,7 @@
                     </a>
 
                     {{-- Live Clock --}}
-                    <div class="inline-flex items-center gap-2.5 bg-white rounded-xl shadow-sm border border-slate-200 px-3 h-11">
+                    <div class="inline-flex items-center gap-2.5 bg-white rounded-xl shadow-sm border border-slate-100 px-3 h-11">
                         <div class="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center text-amber-600">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -512,7 +524,7 @@
 
             {{-- ROW B: stat cards --}}
             <div class="shrink-0 grid grid-cols-3 gap-3">
-                <div class="bg-white rounded-xl px-3 py-2 shadow-sm border border-slate-200 flex items-center gap-3">
+                <div class="bg-white rounded-xl px-3 py-2 shadow-sm border border-slate-100 flex items-center gap-3">
                     <div class="w-9 h-9 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -524,7 +536,7 @@
                         <div class="text-[11px] text-slate-500 font-medium mt-1 truncate">Total Assignments</div>
                     </div>
                 </div>
-                <div class="bg-white rounded-xl px-3 py-2 shadow-sm border border-slate-200 flex items-center gap-3">
+                <div class="bg-white rounded-xl px-3 py-2 shadow-sm border border-slate-100 flex items-center gap-3">
                     <div class="w-9 h-9 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -536,7 +548,7 @@
                         <div class="text-[11px] text-slate-500 font-medium mt-1 truncate">Pending</div>
                     </div>
                 </div>
-                <div class="bg-white rounded-xl px-3 py-2 shadow-sm border border-slate-200 flex items-center gap-3">
+                <div class="bg-white rounded-xl px-3 py-2 shadow-sm border border-slate-100 flex items-center gap-3">
                     <div class="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -554,19 +566,19 @@
             <div class="lg:flex-1 lg:min-h-0 grid grid-cols-1 lg:grid-cols-12 lg:grid-rows-[minmax(0,1fr)] gap-3">
 
                 {{-- Calendar --}}
-                <div class="lg:col-span-7 lg:min-h-0 fit-cal bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+                <div class="lg:col-span-7 lg:min-h-0 fit-cal bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden flex flex-col">
                     <div class="shrink-0 px-4 py-2 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                        <h2 class="text-base font-bold text-slate-900">My Event Calendar</h2>
+                        <div class="flex items-center gap-2"><span class="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 inline-flex items-center justify-center shrink-0"><i class="fas fa-calendar-alt text-xs"></i></span><h2 class="text-sm font-bold text-slate-900">My Event Calendar</h2></div>
                         <div class="flex items-center gap-2">
-                            <select id="calendarView" onchange="calendarSetView(this.value)" class="text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg px-2 py-1.5 bg-white hover:bg-slate-50 cursor-pointer">
+                            <select id="calendarView" onchange="calendarSetView(this.value)" class="h-8 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg px-2 bg-white hover:bg-slate-50 cursor-pointer">
                                 <option value="month">Month</option>
                                 <option value="week">Week</option>
                                 <option value="day">Day</option>
                             </select>
-                            <button type="button" onclick="calendarToday()" class="px-3 py-1.5 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">Today</button>
-                            <button type="button" onclick="calendarPrev()" class="w-8 h-8 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">‹</button>
-                            <button type="button" onclick="calendarNext()" class="w-8 h-8 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">›</button>
-                            <div id="calendarMonthLabel" class="min-w-[150px] text-center text-sm font-bold text-slate-800"></div>
+                            <button type="button" onclick="calendarToday()" class="h-8 px-3 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">Today</button>
+                            <button type="button" onclick="calendarPrev()" class="w-8 h-8 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50" aria-label="Previous"><i class="fas fa-chevron-left text-xs"></i></button>
+                            <button type="button" onclick="calendarNext()" class="w-8 h-8 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50" aria-label="Next"><i class="fas fa-chevron-right text-xs"></i></button>
+                            <div id="calendarMonthLabel" class="min-w-[140px] text-right text-sm font-bold text-slate-800"></div>
                         </div>
                     </div>
 
@@ -591,7 +603,7 @@
                 <div class="lg:col-span-5 lg:min-h-0 flex flex-col gap-3">
 
                     @if($pendingConfirmations->count() > 0)
-                        <div class="shrink-0 max-h-[40%] bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+                        <div class="shrink-0 max-h-[40%] bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden flex flex-col">
                             <div class="shrink-0 px-4 py-2 bg-amber-50 border-b border-amber-100 flex items-center gap-2">
                                 <div class="w-6 h-6 rounded-md bg-amber-100 flex items-center justify-center text-amber-600">
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -633,9 +645,9 @@
                     @endif
 
                     {{-- My Events --}}
-                    <div class="flex-1 min-h-0 max-h-[360px] lg:max-h-none bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+                    <div class="flex-1 min-h-0 max-h-[360px] lg:max-h-none bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden flex flex-col">
                         <div class="shrink-0 px-4 py-2.5 border-b border-slate-100 flex justify-between items-center">
-                            <h2 class="text-base font-bold text-slate-900">My Events</h2>
+                            <div class="flex items-center gap-2"><span class="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 inline-flex items-center justify-center shrink-0"><i class="fas fa-list-ul text-xs"></i></span><h2 class="text-sm font-bold text-slate-900">My Events</h2></div>
                             <a href="{{ route('waiters.my-profile') }}"
                                 class="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 hover:text-amber-800 transition-colors">
                                 View Profile
@@ -686,12 +698,12 @@
 
             {{-- ROW D: charts --}}
             <div class="shrink-0 grid grid-cols-1 sm:grid-cols-2 gap-3 lg:h-[165px]">
-                <div class="bg-white rounded-xl p-3 shadow-sm border border-slate-200 h-[190px] lg:h-full flex flex-col">
-                    <h2 class="shrink-0 text-xs font-bold text-slate-900 mb-1">My Participation</h2>
+                <div class="bg-white rounded-xl p-3 shadow-sm border border-slate-100 h-[190px] lg:h-full flex flex-col">
+                    <h2 class="shrink-0 text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">My Participation</h2>
                     <div class="relative flex-1 min-h-0"><canvas id="waiterStatusChart"></canvas></div>
                 </div>
-                <div class="bg-white rounded-xl p-3 shadow-sm border border-slate-200 h-[190px] lg:h-full flex flex-col">
-                    <h2 class="shrink-0 text-xs font-bold text-slate-900 mb-1">My Equipment Status</h2>
+                <div class="bg-white rounded-xl p-3 shadow-sm border border-slate-100 h-[190px] lg:h-full flex flex-col">
+                    <h2 class="shrink-0 text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">My Equipment Status</h2>
                     <div class="relative flex-1 min-h-0"><canvas id="waiterEquipmentChart"></canvas></div>
                 </div>
             </div>
@@ -752,27 +764,27 @@
         @endforeach
 
         {{-- Confirmation Dialog Modal --}}
-        <div id="confirmModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div id="confirmModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div class="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md mx-4 transform transition-all">
                 <div class="text-center mb-6">
                     <div id="modalIcon" class="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center text-3xl">
                         <!-- Icon injected by JS -->
                     </div>
-                    <h3 id="modalTitle" class="text-xl font-bold text-gray-900 mb-2">Are you sure?</h3>
-                    <p id="modalMessage" class="text-gray-500 text-sm">Please confirm your action.</p>
+                    <h3 id="modalTitle" class="text-xl font-bold text-slate-900 mb-2">Are you sure?</h3>
+                    <p id="modalMessage" class="text-slate-500 text-sm">Please confirm your action.</p>
                 </div>
 
-                <div class="bg-gray-50 rounded-xl p-4 mb-6">
-                    <div class="text-sm text-gray-500 mb-1">Event</div>
-                    <div id="modalEventName" class="font-semibold text-gray-800 text-lg"></div>
+                <div class="bg-slate-50 rounded-xl p-4 mb-6">
+                    <div class="text-sm text-slate-500 mb-1">Event</div>
+                    <div id="modalEventName" class="font-semibold text-slate-800 text-lg"></div>
                     <div id="modalActionText" class="text-sm mt-2 font-medium"></div>
                 </div>
 
                 <div class="flex gap-3">
-                    <button onclick="closeConfirmDialog()" class="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-medium transition">
+                    <button type="button" onclick="closeConfirmDialog()" class="flex-1 px-4 py-2.5 border border-slate-300 text-slate-700 rounded-xl hover:bg-slate-50 font-medium transition">
                         Cancel
                     </button>
-                    <button id="modalConfirmBtn" class="flex-1 px-4 py-2.5 text-white rounded-xl font-medium transition">
+                    <button type="button" id="modalConfirmBtn" class="flex-1 px-4 py-2.5 text-white rounded-xl font-medium transition">
                         Yes, I'm Sure
                     </button>
                 </div>
@@ -1164,13 +1176,13 @@
             currentFormId = (action === 'confirmed' ? 'confirm-form-' : 'decline-form-') + eventId;
 
             if (action === 'confirmed') {
-                iconEl.className = 'w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center bg-green-100 text-green-600';
+                iconEl.className = 'w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center bg-emerald-100 text-emerald-600';
                 iconEl.innerHTML = '<svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>';
                 titleEl.textContent = 'Confirm Participation?';
                 messageEl.textContent = 'You are about to confirm your attendance for this event.';
                 actionTextEl.textContent = 'Action: CONFIRM participation';
-                actionTextEl.className = 'text-sm mt-2 font-medium text-green-600';
-                confirmBtn.className = 'flex-1 px-4 py-2.5 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition';
+                actionTextEl.className = 'text-sm mt-2 font-medium text-emerald-600';
+                confirmBtn.className = 'flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 transition';
             } else {
                 iconEl.className = 'w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center bg-red-100 text-red-600';
                 iconEl.innerHTML = '<svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>';

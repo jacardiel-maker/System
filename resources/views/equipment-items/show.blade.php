@@ -4,14 +4,14 @@
 @section('content')
     @php
         $imageUrl = $equipmentItem->image ? asset('storage/' . $equipmentItem->image) : null;
-        $lowStockThreshold = 5;
+        $lowStockPercent = 20; // Low Stock = available below 20% of total (TC-INV-A06)
 
         $available = (int) $equipmentItem->available_quantity;
         $total = (int) $equipmentItem->total_quantity;
         $allocated = max(0, $total - $available);
         $pct = $total > 0 ? max(0, min(100, ($available / $total) * 100)) : 0;
         $isOut = $available <= 0;
-        $isLow = !$isOut && $available < $lowStockThreshold;
+        $isLow = !$isOut && $total > 0 && ($available * 100) < ($total * $lowStockPercent);
         $barColor = ($isOut || $isLow || $pct < 20) ? 'bg-red-500' : ($pct < 50 ? 'bg-amber-500' : 'bg-emerald-500');
 
         $conditionConfig = [
@@ -43,6 +43,10 @@
             <h1 class="text-2xl font-bold text-slate-800 leading-tight">{{ $equipmentItem->name }}</h1>
         </div>
         <div class="flex items-center gap-2 shrink-0">
+            <a href="{{ route('equipment-items.index') }}"
+                class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition">
+                <i class="fas fa-arrow-left text-xs"></i> Back
+            </a>
             <a href="{{ route('equipment-items.edit', $equipmentItem) }}"
                 class="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 transition">
                 <i class="fas fa-pen text-xs"></i> Edit

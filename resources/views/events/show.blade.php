@@ -43,6 +43,10 @@
             </div>
         </div>
         <div class="flex items-center gap-2 shrink-0">
+            <a href="{{ route('events.index') }}"
+                class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition">
+                <i class="fas fa-arrow-left text-xs"></i> Back
+            </a>
             <a href="{{ route('events.edit', $event) }}"
                 class="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 transition">
                 <i class="fas fa-pen text-xs"></i> Edit
