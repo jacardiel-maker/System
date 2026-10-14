@@ -1,10 +1,15 @@
 # .github/workflows/deploy.yml
+# Every push to main: upload ONLY the changed app files to Hostinger (capstone_system/) by FTPS.
+#
+# vendor/ is NOT uploaded here: it is ~7,000 small files and Hostinger's FTP drops the
+# connection after about an hour. Upload vendor once as a .zip with File Manager instead,
+# and again only when composer.json / composer.lock changes.
 name: Deploy to Hostinger
 
 on:
   push:
     branches: [main]
-  workflow_dispatch:
+  workflow_dispatch: # lets you run it manually from the Actions tab
 
 jobs:
   deploy:
@@ -19,9 +24,9 @@ jobs:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          server-dir: ${{ secrets.FTP_SERVER_DIR }}
-          protocol: ftps
-          security: loose
+          server-dir: ${{ secrets.FTP_SERVER_DIR }}   # capstone_system/  (must end with /)
+          protocol: ftps        # plain FTP was dropped by Hostinger (ECONNRESET)
+          security: loose       # we connect by IP, so the certificate name won't match; still encrypted
           timeout: 120000
           dry-run: false
           exclude: |
@@ -34,3 +39,5 @@ jobs:
             storage/**
             public/**
             tests/**
+            **/*.zip
+            **/*.sql
