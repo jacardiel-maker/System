@@ -168,6 +168,9 @@
             }
 
             nav,
+            aside,
+            header,
+            #sidebarBackdrop,
             .no-print {
                 display: none !important;
             }
@@ -187,11 +190,18 @@
 
     <div class="flex h-screen overflow-hidden">
 
-        {{-- Sidebar --}}
-        <aside class="w-64 bg-white border-r border-slate-200 flex flex-col hidden md:flex z-20">
+        {{-- Mobile backdrop: tap it to close the sidebar --}}
+        <div id="sidebarBackdrop" class="hidden fixed inset-0 z-30 bg-slate-900/40 md:hidden"
+            onclick="closeSidebar()"></div>
 
-            {{-- E-Handog Branding --}}
-            <div class="p-6 border-b border-slate-100">
+        {{-- Sidebar: slides in over the page on mobile, fixed column on desktop --}}
+        <aside id="appSidebar"
+            class="fixed inset-y-0 left-0 z-40 w-64 shrink-0 bg-white border-r border-slate-200 flex flex-col
+                   -translate-x-full transition-transform duration-200 ease-out
+                   md:static md:translate-x-0 md:z-20">
+
+            {{-- E-Serve Branding --}}
+            <div class="p-6 border-b border-slate-100 flex items-center justify-between gap-2">
 
                 <a href="{{ route('dashboard') }}" class="flex items-center gap-3">
 
@@ -213,6 +223,12 @@
                     </div>
 
                 </a>
+
+                {{-- Close button (mobile only) --}}
+                <button type="button" onclick="closeSidebar()" aria-label="Close menu"
+                    class="md:hidden w-9 h-9 shrink-0 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center">
+                    <i class="fas fa-times text-lg"></i>
+                </button>
 
             </div>
 
@@ -380,14 +396,14 @@
         </aside>
 
         {{-- Main Content --}}
-        <div class="flex-1 flex flex-col overflow-hidden">
+        <div class="flex-1 min-w-0 flex flex-col overflow-hidden">
 
             {{-- Top Bar (mobile only: hamburger + bell). Desktop has no header to save space. --}}
             <header
                 class="md:hidden glass border-b border-slate-200 h-14 flex items-center justify-between px-4 sticky top-0 z-10">
 
-                <button class="text-slate-500 hover:text-slate-700"
-                    onclick="document.querySelector('aside').classList.toggle('hidden'); document.querySelector('aside').classList.toggle('absolute'); document.querySelector('aside').classList.toggle('h-full');">
+                <button type="button" class="text-slate-500 hover:text-slate-700" aria-label="Open menu"
+                    onclick="openSidebar()">
 
                     <i class="fas fa-bars text-xl"></i>
 
@@ -504,6 +520,32 @@
             document.addEventListener('keydown', e => {
                 if (e.key === 'Escape' && !modal.classList.contains('hidden')) window.closeLogoutModal();
             });
+        })();
+    </script>
+
+    {{-- Mobile sidebar open / close --}}
+    <script>
+        (function () {
+            const sidebar = document.getElementById('appSidebar');
+            const backdrop = document.getElementById('sidebarBackdrop');
+            const desktop = window.matchMedia('(min-width: 768px)');
+
+            window.openSidebar = function () {
+                sidebar.classList.remove('-translate-x-full');
+                backdrop.classList.remove('hidden');
+            };
+            window.closeSidebar = function () {
+                sidebar.classList.add('-translate-x-full');
+                backdrop.classList.add('hidden');
+            };
+
+            // Tapping a menu link on mobile closes the sidebar
+            sidebar.querySelectorAll('nav a').forEach(a =>
+                a.addEventListener('click', () => { if (!desktop.matches) window.closeSidebar(); })
+            );
+
+            document.addEventListener('keydown', e => { if (e.key === 'Escape') window.closeSidebar(); });
+            desktop.addEventListener('change', e => { if (e.matches) window.closeSidebar(); });
         })();
     </script>
 
