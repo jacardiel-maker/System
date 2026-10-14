@@ -1,12 +1,10 @@
 # .github/workflows/deploy.yml
-# Every push to main: install Composer packages on GitHub (where proc_open works),
-# then upload ONLY the changed files to Hostinger by FTP.
 name: Deploy to Hostinger
 
 on:
   push:
     branches: [main]
-  workflow_dispatch: # lets you run it manually from the Actions tab
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -15,33 +13,24 @@ jobs:
       - name: Get the code
         uses: actions/checkout@v4
 
-      - name: Set up PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.2'   # match the PHP version of eserve.site in hPanel
-          extensions: mbstring, pdo_mysql, zip, gd
-
-      - name: Install Composer packages (vendor folder)
-        run: composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
-
-      - name: Upload to Hostinger (FTP)
+      - name: Upload to Hostinger (FTPS)
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          server-dir: ${{ secrets.FTP_SERVER_DIR }}   # e.g. capstone_system/  (must end with /)
-          # public/ is skipped: on Hostinger its files live in public_html (with a custom index.php).
-          # If you ever change something inside public/, upload that file to public_html by File Manager.
-          protocol: ftps        # Hostinger dropped the plain-FTP data connection (ECONNRESET); FTPS (explicit TLS) is more stable
-          security: loose       # we connect by IP, so the TLS certificate name won't match; still encrypted
-          timeout: 120000       # 2 minutes per operation (first upload is ~75 MB)
+          server-dir: ${{ secrets.FTP_SERVER_DIR }}
+          protocol: ftps
+          security: loose
+          timeout: 120000
           dry-run: false
           exclude: |
             **/.git*
             **/.git*/**
             **/node_modules/**
             .env
+            vendor/**
+            bootstrap/cache/**
             storage/**
             public/**
             tests/**
