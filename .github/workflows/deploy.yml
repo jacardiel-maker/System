@@ -33,7 +33,7 @@ jobs:
           server-dir: ${{ secrets.FTP_SERVER_DIR }}   # e.g. capstone_system/  (must end with /)
           # public/ is skipped: on Hostinger its files live in public_html (with a custom index.php).
           # If you ever change something inside public/, upload that file to public_html by File Manager.
-          dry-run: true   # FIRST RUN: only lists what it would upload. Change to false once the list looks right.
+          dry-run: false   # FIRST RUN: only lists what it would upload. Change to false once the list looks right.
           exclude: |
             **/.git*
             **/.git*/**
