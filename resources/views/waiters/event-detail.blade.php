@@ -340,6 +340,7 @@
         <form id="respond-declined" action="{{ route('events.confirm', $event) }}" method="POST" class="hidden">
             @csrf
             <input type="hidden" name="status" value="declined">
+            <input type="hidden" name="decline_reason" id="declineReasonInput">
         </form>
 
         {{-- Confirmation Dialog --}}
@@ -355,6 +356,25 @@
                     <div class="font-semibold text-slate-800">{{ $event->event_name }}</div>
                     <div class="text-xs text-slate-500 mt-0.5">{{ $event->event_date?->format('M d, Y · g:i A') }}</div>
                 </div>
+
+                {{-- Reason (only shown when declining) --}}
+                <div id="declineReasonBox" class="hidden mb-5">
+                    <label for="declineReason" class="block text-xs font-semibold text-slate-700 mb-1">
+                        Reason for declining <span class="text-red-500">*</span>
+                    </label>
+                    <textarea id="declineReason" rows="3" maxlength="500"
+                        placeholder="e.g. I have a class on that day / I am sick / family emergency"
+                        class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent"></textarea>
+                    <div class="flex justify-between mt-1">
+                        <p id="declineReasonError" class="hidden text-xs text-red-600 font-medium">Please enter at least 5 characters.</p>
+                        <p class="text-[11px] text-slate-400 ml-auto"><span id="declineReasonCount">0</span>/500</p>
+                    </div>
+                </div>
+
+                @error('decline_reason')
+                    <p class="mb-3 text-xs text-red-600 font-medium">{{ $message }}</p>
+                @enderror
+
                 <div class="flex gap-3">
                     <button type="button" onclick="closeResponseDialog()"
                         class="flex-1 px-4 py-2.5 border border-slate-300 text-slate-700 rounded-xl hover:bg-slate-50 font-medium transition">
@@ -375,7 +395,16 @@
                 const title = document.getElementById('responseTitle');
                 const message = document.getElementById('responseMessage');
                 const btn = document.getElementById('responseConfirmBtn');
+                const reasonBox = document.getElementById('declineReasonBox');
+                const reason = document.getElementById('declineReason');
+                const reasonError = document.getElementById('declineReasonError');
+                const reasonCount = document.getElementById('declineReasonCount');
                 let pending = null;
+
+                reason.addEventListener('input', () => {
+                    reasonCount.textContent = reason.value.length;
+                    if (reason.value.trim().length >= 5) reasonError.classList.add('hidden');
+                });
 
                 window.openResponseDialog = function (action) {
                     pending = action;
@@ -384,12 +413,16 @@
                         icon.innerHTML = '<i class="fas fa-check text-xl"></i>';
                         title.textContent = 'Confirm Attendance?';
                         message.textContent = 'You are confirming that you will work at this event.';
+                        reasonBox.classList.add('hidden');
                         btn.className = 'flex-1 px-4 py-2.5 text-white rounded-xl font-medium transition bg-emerald-600 hover:bg-emerald-700';
                     } else {
                         icon.className = 'w-14 h-14 rounded-full mx-auto mb-3 flex items-center justify-center bg-red-100 text-red-600';
                         icon.innerHTML = '<i class="fas fa-times text-xl"></i>';
                         title.textContent = 'Decline This Event?';
-                        message.textContent = 'The admin will be notified that you cannot attend.';
+                        message.textContent = 'The owner will be notified that you cannot attend. Please tell them why.';
+                        reasonBox.classList.remove('hidden');
+                        reasonError.classList.add('hidden');
+                        setTimeout(() => reason.focus(), 50);
                         btn.className = 'flex-1 px-4 py-2.5 text-white rounded-xl font-medium transition bg-red-600 hover:bg-red-700';
                     }
                     btn.disabled = false;
@@ -404,6 +437,15 @@
 
                 btn.addEventListener('click', function () {
                     if (!pending) return;
+                    if (pending === 'declined') {
+                        const text = reason.value.trim();
+                        if (text.length < 5) {
+                            reasonError.classList.remove('hidden');
+                            reason.focus();
+                            return;
+                        }
+                        document.getElementById('declineReasonInput').value = text;
+                    }
                     this.disabled = true;
                     this.textContent = 'Saving...';
                     document.getElementById('respond-' + pending).submit();
@@ -411,6 +453,13 @@
 
                 modal.addEventListener('click', e => { if (e.target === modal) window.closeResponseDialog(); });
                 document.addEventListener('keydown', e => { if (e.key === 'Escape') window.closeResponseDialog(); });
+
+                // Server rejected the reason: reopen the decline dialog with what they typed
+                @if($errors->has('decline_reason'))
+                    window.openResponseDialog('declined');
+                    reason.value = @json(old('decline_reason', ''));
+                    reasonCount.textContent = reason.value.length;
+                @endif
             })();
         </script>
     @endif

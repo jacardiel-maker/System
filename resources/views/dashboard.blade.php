@@ -760,6 +760,7 @@
             <form id="decline-form-{{ $event->id }}" action="{{ route('events.confirm', $event) }}" method="POST" class="hidden">
                 @csrf
                 <input type="hidden" name="status" value="declined">
+                <input type="hidden" name="decline_reason" class="decline-reason-input">
             </form>
         @endforeach
 
@@ -778,6 +779,20 @@
                     <div class="text-sm text-slate-500 mb-1">Event</div>
                     <div id="modalEventName" class="font-semibold text-slate-800 text-lg"></div>
                     <div id="modalActionText" class="text-sm mt-2 font-medium"></div>
+                </div>
+
+                {{-- Reason (only shown when declining) --}}
+                <div id="declineReasonBox" class="hidden mb-6">
+                    <label for="declineReason" class="block text-xs font-semibold text-slate-700 mb-1">
+                        Reason for declining <span class="text-red-500">*</span>
+                    </label>
+                    <textarea id="declineReason" rows="3" maxlength="500"
+                        placeholder="e.g. I have a class on that day / I am sick / family emergency"
+                        class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent"></textarea>
+                    <div class="flex justify-between mt-1">
+                        <p id="declineReasonError" class="hidden text-xs text-red-600 font-medium">Please enter at least 5 characters.</p>
+                        <p class="text-[11px] text-slate-400 ml-auto"><span id="declineReasonCount">0</span>/500</p>
+                    </div>
                 </div>
 
                 <div class="flex gap-3">
@@ -1175,6 +1190,18 @@
             eventNameEl.textContent = eventName;
             currentFormId = (action === 'confirmed' ? 'confirm-form-' : 'decline-form-') + eventId;
 
+            const reasonBox = document.getElementById('declineReasonBox');
+            const reasonEl = document.getElementById('declineReason');
+            document.getElementById('declineReasonError').classList.add('hidden');
+            if (action === 'declined') {
+                reasonBox.classList.remove('hidden');
+                reasonEl.value = '';
+                document.getElementById('declineReasonCount').textContent = '0';
+                setTimeout(() => reasonEl.focus(), 50);
+            } else {
+                reasonBox.classList.add('hidden');
+            }
+
             if (action === 'confirmed') {
                 iconEl.className = 'w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center bg-emerald-100 text-emerald-600';
                 iconEl.innerHTML = '<svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>';
@@ -1187,7 +1214,7 @@
                 iconEl.className = 'w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center bg-red-100 text-red-600';
                 iconEl.innerHTML = '<svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>';
                 titleEl.textContent = 'Decline Participation?';
-                messageEl.textContent = 'You are about to decline your attendance for this event.';
+                messageEl.textContent = 'The owner will be notified that you cannot attend. Please tell them why.';
                 actionTextEl.textContent = 'Action: DECLINE participation';
                 actionTextEl.className = 'text-sm mt-2 font-medium text-red-600';
                 confirmBtn.className = 'flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition';
@@ -1205,10 +1232,30 @@
         // Modal only exists on the waiter dashboard, so guard against null on admin.
         const modalConfirmBtn = document.getElementById('modalConfirmBtn');
         if (modalConfirmBtn) {
+            const reasonEl = document.getElementById('declineReason');
+            reasonEl.addEventListener('input', function () {
+                document.getElementById('declineReasonCount').textContent = this.value.length;
+                if (this.value.trim().length >= 5) document.getElementById('declineReasonError').classList.add('hidden');
+            });
+
             modalConfirmBtn.addEventListener('click', function () {
-                if (currentFormId) {
-                    document.getElementById(currentFormId).submit();
+                if (!currentFormId) return;
+                const form = document.getElementById(currentFormId);
+
+                // Declining needs a reason
+                if (currentFormId.startsWith('decline-form-')) {
+                    const text = reasonEl.value.trim();
+                    if (text.length < 5) {
+                        document.getElementById('declineReasonError').classList.remove('hidden');
+                        reasonEl.focus();
+                        return;
+                    }
+                    form.querySelector('.decline-reason-input').value = text;
                 }
+
+                this.disabled = true;
+                this.textContent = 'Saving...';
+                form.submit();
             });
         }
 

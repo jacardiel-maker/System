@@ -207,10 +207,23 @@ class EventController extends Controller
             return back()->with('error', 'Invalid status.');
         }
 
-        // Update the pivot
+        // A reason is required when declining
+        $reason = null;
+        if ($status === 'declined') {
+            $request->validate([
+                'decline_reason' => 'required|string|min:5|max:500',
+            ], [
+                'decline_reason.required' => 'Please tell the owner why you are declining.',
+                'decline_reason.min' => 'Please give a short reason (at least 5 characters).',
+            ]);
+            $reason = trim($request->input('decline_reason'));
+        }
+
+        // Update the pivot (confirmed_at = when the waiter responded, for both confirm and decline)
         $event->waiters()->updateExistingPivot($waiter->id, [
             'confirmation_status' => $status,
-            'confirmed_at' => $status === 'confirmed' ? now() : null,
+            'confirmed_at' => now(),
+            'decline_reason' => $reason,
         ]);
 
         // Notify every owner/admin account (bell + email), plus the event creator
@@ -222,7 +235,7 @@ class EventController extends Controller
 
         $notification = $status === 'confirmed'
             ? new WaiterConfirmedNotification($event, $waiter)
-            : new EventDeclinedNotification($event, $waiter);
+            : new EventDeclinedNotification($event, $waiter, $reason);
 
         foreach ($admins as $admin) {
             $admin->notify($notification);

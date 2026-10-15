@@ -33,7 +33,7 @@ class Event extends Model
     public function waiters()
     {
         return $this->belongsToMany(Waiter::class, 'event_waiter')
-            ->withPivot('confirmation_status', 'role', 'confirmed_at', 'time_in', 'time_out')
+            ->withPivot('confirmation_status', 'role', 'confirmed_at', 'time_in', 'time_out', 'decline_reason')
             ->withTimestamps();
     }
 
@@ -42,6 +42,7 @@ class Event extends Model
         return $this->hasMany(EventEquipment::class);
     }
 
+    // Uses waiters() above, so it already includes decline_reason
     public function confirmedWaiters()
     {
         return $this->waiters()->wherePivot('confirmation_status', 'confirmed');

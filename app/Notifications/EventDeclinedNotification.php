@@ -15,7 +15,8 @@ class EventDeclinedNotification extends Notification
 
     public function __construct(
         public Event $event,
-        public Waiter $waiter
+        public Waiter $waiter,
+        public ?string $reason = null
     ) {}
 
     /** Bell notification + email to the owner/admin */
@@ -35,6 +36,7 @@ class EventDeclinedNotification extends Notification
             ->line('**Event:** ' . $this->event->event_name)
             ->line('**Date:** ' . $this->event->event_date->format('l, F d, Y h:i A'))
             ->line('**Waiter:** ' . $waiterName)
+            ->line('**Reason:** ' . ($this->reason ?: 'No reason given'))
             ->action('View Event', route('events.show', $this->event))
             ->salutation('E Serve');
     }
@@ -49,6 +51,7 @@ class EventDeclinedNotification extends Notification
             'title' => 'Event Declined',
             'message' => $this->waiter->user->name . ' declined the event: ' . $this->event->event_name,
             'declined_at' => now()->toDateTimeString(),
+            'reason' => $this->reason,
             'type' => 'event_declined',
         ];
     }

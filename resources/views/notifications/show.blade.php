@@ -40,6 +40,7 @@
         'Event'       => $data['event_name'] ?? null,
         'Event Date'  => $fmt($data['event_date'] ?? null),
         'Declined At' => $kind === 'declined' ? $fmt($data['declined_at'] ?? null) : null,
+        'Reason'      => $kind === 'declined' ? ($data['reason'] ?? null) : null,
     ]);
 
     $eventId = $data['event_id'] ?? null;

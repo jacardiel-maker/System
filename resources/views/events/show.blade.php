@@ -251,6 +251,13 @@
                                 <span class="shrink-0 inline-block px-2 py-0.5 rounded-full text-[11px] font-medium {{ $cConfig[0] }}">{{ $cConfig[1] }}</span>
                             </div>
 
+                            {{-- Why the waiter declined --}}
+                            @if($conf === 'declined' && !empty($waiter->pivot->decline_reason))
+                                <div class="mx-3 mb-2 rounded-md bg-red-50 border border-red-100 px-2.5 py-1.5 text-[11px] text-red-700">
+                                    <span class="font-semibold">Reason:</span> {{ $waiter->pivot->decline_reason }}
+                                </div>
+                            @endif
+
                             {{-- Attendance --}}
                             <form action="{{ route('events.waiter.time', [$event, $waiter]) }}" method="POST" class="px-3 pb-3 pt-2 border-t border-slate-100 bg-slate-50/40">
                                 @csrf
