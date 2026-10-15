@@ -91,7 +91,14 @@ class EventController extends Controller
             }
         }
 
-        return redirect()->route('events.show', $event)->with('success', 'Event created and notifications sent to ' . count($validated['waiters'] ?? []) . ' waiter(s).');
+        // Count only the waiters that were actually ticked (the form also sends a role for unticked rows)
+        $assignedCount = collect($validated['waiters'] ?? [])->filter(fn ($w) => !empty($w['id']))->count();
+
+        $message = $assignedCount > 0
+            ? 'Event created and notifications sent to ' . $assignedCount . ' ' . \Illuminate\Support\Str::plural('waiter', $assignedCount) . '.'
+            : 'Event created. No waiters assigned yet.';
+
+        return redirect()->route('events.show', $event)->with('success', $message);
     }
 
     public function show(Event $event)
