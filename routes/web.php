@@ -296,7 +296,20 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/event-equipment/{eventEquipment}/return', function (Request $request, \App\Models\EventEquipment $eventEquipment) {
             if (!auth()->user()->isAdmin())
                 abort(403);
-            return app(EventEquipmentController::class)->returnEquipment($request, $eventEquipment);
+            $response = app(EventEquipmentController::class)->returnEquipment($request, $eventEquipment);
+
+            // Stay on the page where "Record Return" was clicked (Allocations list with its filters/page,
+            // the allocation details page, or the event page) instead of jumping to another screen.
+            // The success/error message set by the controller is kept.
+            $previous = url()->previous();
+            if ($response instanceof \Illuminate\Http\RedirectResponse
+                && $previous
+                && str_starts_with($previous, url('/'))
+                && $previous !== url()->current()) {
+                return redirect()->to($previous);
+            }
+
+            return $response;
         })->name('event-equipment.return');
 
         // Equipment Logs (admin view)
