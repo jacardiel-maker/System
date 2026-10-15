@@ -265,7 +265,8 @@
                         </p>
                     @endif
 
-                    {{-- Attendance (recorded by admin) --}}
+                    {{-- Attendance (recorded by admin) — only once the waiter has confirmed --}}
+                    @if($confStatus === 'confirmed')
                     <div class="pt-3 border-t border-slate-100 grid grid-cols-2 gap-2">
                         <div class="rounded-lg bg-slate-50 px-3 py-2">
                             <p class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Time In</p>
@@ -276,6 +277,7 @@
                             <p class="text-xs font-semibold {{ $timeOut ? 'text-slate-700' : 'text-slate-400 italic font-normal' }}">{{ $timeOut ?? 'Not yet' }}</p>
                         </div>
                     </div>
+                    @endif
 
                     {{-- Confirm / Decline buttons live only in the yellow banner at the top --}}
                     @if($canRespond)

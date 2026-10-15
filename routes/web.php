@@ -343,6 +343,12 @@ Route::middleware(['auth'])->group(function () {
             if (!auth()->user()->isAdmin())
                 abort(403);
 
+            // Time in / out can only be recorded for waiters who CONFIRMED this event
+            $assigned = $event->waiters()->where('waiters.id', $waiter->id)->first();
+            if (!$assigned || strtolower((string) $assigned->pivot->confirmation_status) !== 'confirmed') {
+                return back()->with('error', 'Time in / out can only be recorded for waiters who confirmed.');
+            }
+
             $validated = $request->validate([
                 'time_in' => 'nullable|date',
                 'time_out' => 'nullable|date|after_or_equal:time_in',

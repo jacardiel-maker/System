@@ -663,9 +663,12 @@
                                         <a href="{{ route('waiters.my-event', $event) }}"
                                             class="text-sm font-semibold text-slate-900 hover:text-amber-700 transition-colors truncate block">{{ $event->event_name }}</a>
                                         <div class="text-[11px] text-slate-500 truncate">
-                                            {{ $event->event_date->format('M d, Y h:i A') }} • {{ ucfirst($event->pivot->role) }}
-                                            • In: {{ $event->pivot->time_in ? \Carbon\Carbon::parse($event->pivot->time_in)->format('h:i A') : '—' }}
-                                            • Out: {{ $event->pivot->time_out ? \Carbon\Carbon::parse($event->pivot->time_out)->format('h:i A') : '—' }}
+                                            {{ $event->event_date->format('M d, Y h:i A') }} • {{ ucfirst(str_replace('_', ' ', $event->pivot->role)) }}
+                                            {{-- Time in / out only applies once the waiter has confirmed --}}
+                                            @if(strtolower((string) $event->pivot->confirmation_status) === 'confirmed')
+                                                • In: {{ $event->pivot->time_in ? \Carbon\Carbon::parse($event->pivot->time_in)->format('h:i A') : '—' }}
+                                                • Out: {{ $event->pivot->time_out ? \Carbon\Carbon::parse($event->pivot->time_out)->format('h:i A') : '—' }}
+                                            @endif
                                         </div>
                                     </div>
                                     @php

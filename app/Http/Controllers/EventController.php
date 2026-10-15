@@ -220,11 +220,17 @@ class EventController extends Controller
         }
 
         // Update the pivot (confirmed_at = when the waiter responded, for both confirm and decline)
-        $event->waiters()->updateExistingPivot($waiter->id, [
+        $pivot = [
             'confirmation_status' => $status,
             'confirmed_at' => now(),
             'decline_reason' => $reason,
-        ]);
+        ];
+        if ($status === 'declined') {
+            // A declined waiter has no attendance
+            $pivot['time_in'] = null;
+            $pivot['time_out'] = null;
+        }
+        $event->waiters()->updateExistingPivot($waiter->id, $pivot);
 
         // Notify every owner/admin account (bell + email), plus the event creator
         $admins = User::all()->filter(fn ($user) => $user->isAdmin());

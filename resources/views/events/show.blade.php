@@ -258,7 +258,8 @@
                                 </div>
                             @endif
 
-                            {{-- Attendance --}}
+                            {{-- Attendance: only confirmed waiters can have Time In / Time Out --}}
+                            @if($conf === 'confirmed')
                             <form action="{{ route('events.waiter.time', [$event, $waiter]) }}" method="POST" class="px-3 pb-3 pt-2 border-t border-slate-100 bg-slate-50/40">
                                 @csrf
                                 <div class="grid grid-cols-2 gap-2">
@@ -280,6 +281,12 @@
                                     <i class="fas fa-check text-[10px]"></i> Save Attendance
                                 </button>
                             </form>
+                            @else
+                                <div class="px-3 py-2 border-t border-slate-100 bg-slate-50/40 text-[11px] text-slate-400 italic">
+                                    <i class="fas fa-info-circle mr-1"></i>
+                                    {{ $conf === 'declined' ? 'Declined — no attendance to record.' : 'Time in / out is available once the waiter confirms.' }}
+                                </div>
+                            @endif
                         </div>
                     @empty
                         <div class="py-6 text-center text-slate-400">
