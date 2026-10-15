@@ -4,9 +4,10 @@ namespace App\Notifications;
 
 use App\Models\Event;
 use App\Models\Waiter;
+use App\Notifications\Channels\SafeMailChannel;
 use Illuminate\Bus\Queueable;
-use Illuminate\Notifications\Notification;
 use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Notifications\Notification;
 
 class WaiterConfirmedNotification extends Notification
 {
@@ -17,24 +18,32 @@ class WaiterConfirmedNotification extends Notification
         public Waiter $waiter
     ) {}
 
+    /** Bell notification + email to the owner/admin */
     public function via(object $notifiable): array
     {
-        return ['database'];
+        return ['database', SafeMailChannel::class];
     }
 
     public function toMail(object $notifiable): MailMessage
     {
-        return (new MailMessage)
-            ->subject('✅ Waiter Confirmed: ' . $this->event->event_name)
-            ->greeting('Hello Admin,')
-            ->line($this->waiter->user->name . ' has confirmed their participation for an event.')
-            ->line(' ')
-            ->line('📅 **Event:** ' . $this->event->event_name)
-            ->line('🕐 **Date:** ' . $this->event->event_date->format('F d, Y h:i A'))
-            ->line('👤 **Waiter:** ' . $this->waiter->user->name)
-            ->line('🎭 **Role:** ' . ucfirst($this->waiter->pivot->role ?? 'waiter'))
-            ->action('View Event', url('/events/' . $this->event->id))
-            ->salutation('Steph\'s Catering System');
+        $waiterName = $this->waiter->user->name ?? 'A waiter';
+        $role = $this->waiter->pivot->role ?? null;
+
+        $mail = (new MailMessage)
+            ->subject('Waiter Confirmed: ' . $this->event->event_name)
+            ->greeting('Hello ' . $notifiable->name . ',')
+            ->line($waiterName . ' has **confirmed** their participation.')
+            ->line('**Event:** ' . $this->event->event_name)
+            ->line('**Date:** ' . $this->event->event_date->format('l, F d, Y h:i A'))
+            ->line('**Waiter:** ' . $waiterName);
+
+        if ($role) {
+            $mail->line('**Role:** ' . ucwords(str_replace('_', ' ', $role)));
+        }
+
+        return $mail
+            ->action('View Event', route('events.show', $this->event))
+            ->salutation('E Serve');
     }
 
     public function toArray(object $notifiable): array

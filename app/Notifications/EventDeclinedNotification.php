@@ -4,7 +4,9 @@ namespace App\Notifications;
 
 use App\Models\Event;
 use App\Models\Waiter;
+use App\Notifications\Channels\SafeMailChannel;
 use Illuminate\Bus\Queueable;
+use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
 class EventDeclinedNotification extends Notification
@@ -16,9 +18,25 @@ class EventDeclinedNotification extends Notification
         public Waiter $waiter
     ) {}
 
+    /** Bell notification + email to the owner/admin */
     public function via(object $notifiable): array
     {
-        return ['database'];
+        return ['database', SafeMailChannel::class];
+    }
+
+    public function toMail(object $notifiable): MailMessage
+    {
+        $waiterName = $this->waiter->user->name ?? 'A waiter';
+
+        return (new MailMessage)
+            ->subject('Event Declined: ' . $this->event->event_name)
+            ->greeting('Hello ' . $notifiable->name . ',')
+            ->line($waiterName . ' has **declined** their assignment. You may need to assign a replacement.')
+            ->line('**Event:** ' . $this->event->event_name)
+            ->line('**Date:** ' . $this->event->event_date->format('l, F d, Y h:i A'))
+            ->line('**Waiter:** ' . $waiterName)
+            ->action('View Event', route('events.show', $this->event))
+            ->salutation('E Serve');
     }
 
     public function toArray(object $notifiable): array

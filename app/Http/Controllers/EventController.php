@@ -2,13 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use App\Mail\EventAssignmentMail;
 use App\Models\Event;
+use App\Models\User;
 use App\Models\Waiter;
 use App\Notifications\EventAssignedNotification;
+use App\Notifications\EventDeclinedNotification;
 use App\Notifications\EventReminderNotification;
+use App\Notifications\WaiterConfirmedNotification;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Mail;
 
 class EventController extends Controller
 {
@@ -84,17 +86,8 @@ class EventController extends Controller
                     'confirmation_status' => 'pending',
                 ]);
 
-                $waiter = Waiter::find($waiterData['id']);
-
-                // Send via Notification (database + mail)
-                $waiter->user->notify(new EventAssignedNotification($event));
-
-                // ALSO send direct Mailable for better Gmail formatting
-                try {
-                    Mail::to($waiter->user->email)->send(new EventAssignmentMail($event, $waiter->user));
-                } catch (\Exception $e) {
-                    \Log::error('Mail failed for ' . $waiter->user->email . ': ' . $e->getMessage());
-                }
+                // Bell notification + email (one email only; a failed email never breaks the page)
+                Waiter::with('user')->find($waiterData['id'])?->user?->notify(new EventAssignedNotification($event));
             }
         }
 
@@ -137,40 +130,52 @@ class EventController extends Controller
             'event_date' => $validated['event_date'],
             'setup_time' => $validated['setup_time'],
             'guest_count' => $validated['guest_count'] ?? null,
-            'status' => $validated['status'],
+            'status' => $validated['status'] ?? $event->status,
             'notes' => $validated['notes'] ?? null,
         ]);
 
-        // Sync waiters
-        $event->waiters()->detach();
-        if (!empty($validated['waiters'])) {
-            foreach ($validated['waiters'] as $waiterData) {
-                if (!isset($waiterData['id']))
-                    continue;
+        // Sync waiters WITHOUT resetting the ones already assigned:
+        //  - waiters who stay keep their Confirmed/Declined status and time in/out (only the role is updated)
+        //  - waiters who were removed are detached
+        //  - only NEWLY added waiters start as "pending" and get notified
+        $currentIds = $event->waiters()->pluck('waiters.id')->all();
+        $submitted = collect($validated['waiters'] ?? [])
+            ->filter(fn ($w) => !empty($w['id']))
+            ->keyBy(fn ($w) => (int) $w['id']);
 
-                $event->waiters()->attach($waiterData['id'], [
-                    'role' => $waiterData['role'] ?? 'waiter',
+        $removedIds = array_diff($currentIds, $submitted->keys()->all());
+        if ($removedIds) {
+            $event->waiters()->detach($removedIds);
+        }
+
+        $newIds = [];
+        foreach ($submitted as $id => $waiterData) {
+            $role = $waiterData['role'] ?? 'waiter';
+
+            if (in_array($id, $currentIds)) {
+                $event->waiters()->updateExistingPivot($id, ['role' => $role]);
+            } else {
+                $event->waiters()->attach($id, [
+                    'role' => $role,
                     'confirmation_status' => 'pending',
                 ]);
-
-                $waiter = Waiter::find($waiterData['id']);
-
-                // Send notification
-                $waiter->user->notify(new EventAssignedNotification($event));
-
-                // Send direct email
-                try {
-                    Mail::to($waiter->user->email)->send(new EventAssignmentMail($event, $waiter->user));
-                } catch (\Exception $e) {
-                    \Log::error('Mail failed: ' . $e->getMessage());
-                }
+                $newIds[] = $id;
             }
         }
 
-        // Notify confirmed waiters if date changed
-        if ($oldDate != $validated['event_date']) {
+        // Newly assigned waiters: bell notification + email
+        Waiter::with('user')->whereIn('id', $newIds)->get()
+            ->each(fn ($waiter) => $waiter->user?->notify(new EventAssignedNotification($event)));
+
+        // Date/time changed: tell the confirmed waiters who were already on the team
+        $dateChanged = !$oldDate || !$oldDate->equalTo(Carbon::parse($validated['event_date']));
+        if ($dateChanged) {
+            $event->load('confirmedWaiters.user');
             foreach ($event->confirmedWaiters as $waiter) {
-                $waiter->user->notify(new EventReminderNotification($event, 'update'));
+                if (in_array($waiter->id, $newIds)) {
+                    continue; // they just got the assignment notice
+                }
+                $waiter->user?->notify(new EventReminderNotification($event, 'update'));
             }
         }
 
@@ -201,25 +206,24 @@ class EventController extends Controller
             'confirmed_at' => $status === 'confirmed' ? now() : null,
         ]);
 
-        // Notify admin when CONFIRMED
-        if ($status === 'confirmed') {
-            $admin = $event->creator;
-            if ($admin) {
-                $admin->notify(new \App\Notifications\WaiterConfirmedNotification($event, $waiter));
-            }
+        // Notify every owner/admin account (bell + email), plus the event creator
+        $admins = User::all()->filter(fn ($user) => $user->isAdmin());
+        if ($event->creator) {
+            $admins->push($event->creator);
         }
+        $admins = $admins->unique('id');
 
-        // Notify admin only when DECLINED
-        if ($status === 'declined') {
-            $admin = $event->creator;
-            if ($admin) {
-                $admin->notify(new \App\Notifications\EventDeclinedNotification($event, $waiter));
-            }
+        $notification = $status === 'confirmed'
+            ? new WaiterConfirmedNotification($event, $waiter)
+            : new EventDeclinedNotification($event, $waiter);
+
+        foreach ($admins as $admin) {
+            $admin->notify($notification);
         }
 
         $message = $status === 'confirmed'
             ? 'Participation confirmed successfully.'
-            : 'Participation declined. Admin has been notified.';
+            : 'Participation declined. The owner has been notified.';
 
         return back()->with('success', $message);
     }
