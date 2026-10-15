@@ -277,17 +277,11 @@
                         </div>
                     </div>
 
+                    {{-- Confirm / Decline buttons live only in the yellow banner at the top --}}
                     @if($canRespond)
-                        <div class="pt-3 border-t border-slate-100 space-y-2">
-                            <button type="button" onclick="openResponseDialog('confirmed')"
-                                class="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 transition">
-                                <i class="fas fa-check text-xs"></i> Confirm Attendance
-                            </button>
-                            <button type="button" onclick="openResponseDialog('declined')"
-                                class="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-white border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 transition">
-                                <i class="fas fa-times text-xs"></i> Decline
-                            </button>
-                        </div>
+                        <p class="pt-3 border-t border-slate-100 text-[11px] text-amber-700">
+                            <i class="fas fa-arrow-up mr-1"></i> Use the Confirm or Decline button at the top of the page.
+                        </p>
                     @endif
                 </div>
             </div>
