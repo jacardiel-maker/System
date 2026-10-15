@@ -126,10 +126,22 @@
                 class="px-3 py-2 rounded-lg border border-slate-200 text-slate-600 text-sm font-semibold hover:bg-slate-50 transition inline-flex items-center gap-2">
                 <i class="fas fa-arrow-left text-xs"></i> Back
             </a>
-            <button type="button" onclick="window.print()"
-                class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-semibold inline-flex items-center gap-2 transition">
-                <i class="fas fa-print text-xs"></i> Print Report
-            </button>
+            @include('reports.partials.export', [
+                'title' => 'EQUIPMENT ACTIVITY LOGS REPORT',
+                'filename' => 'equipment-logs-report',
+                'orientation' => 'landscape',
+                'meta' => [
+                    'Period' => $periodLabel,
+                    'Action' => $actionConfig[$currentAction][1] ?? 'All Actions',
+                ],
+                'summary' => [
+                    'Log Entries' => number_format($summary['entries']),
+                    'Units Allocated' => number_format($summary['allocated']),
+                    'Units Returned' => number_format($summary['returned']),
+                    'Units Damaged' => number_format($summary['damaged']),
+                    'Units Missing' => number_format($summary['missing']),
+                ],
+            ])
         </div>
     </div>
 
