@@ -18,32 +18,47 @@
             );
         };
 
-        // Build one row per waiter who has at least one issue
-        $rowsData = collect($waiters)->map(function ($waiter) use ($pendingOf) {
-            $equipment = $waiter->assignedEquipment ?? collect();
+        // Read the equipment records straight from the database (not from what the page was handed),
+        // so a record that was returned WITH damaged / missing units can never drop out of this report.
+        // An "issue" = any record with damaged or missing units, or units not yet accounted for.
+        $issueRecords = \App\Models\EventEquipment::with(['equipmentItem', 'event', 'assignedWaiter.user'])
+            ->where(function ($q) {
+                $q->where('quantity_damaged', '>', 0)
+                  ->orWhere('quantity_missing', '>', 0)
+                  ->orWhereNotIn('status', ['returned', 'lost']);
+            })
+            ->get();
 
-            $pending = (int) $equipment->sum($pendingOf);
-            $damaged = (int) $equipment->sum('quantity_damaged');
-            $missing = (int) $equipment->sum('quantity_missing');
-            $total = $pending + $damaged + $missing;
+        // One row per assigned waiter (records with nobody assigned are grouped under "Unassigned")
+        $rowsData = $issueRecords
+            ->groupBy(fn ($r) => $r->assigned_waiter_id ?? 0)
+            ->map(function ($equipment) use ($pendingOf) {
+                $waiter = $equipment->first()->assignedWaiter; // null = unassigned
 
-            // Items involved, e.g. "Dinner Plate (2 missing, 1 damaged)"
-            $items = $equipment->map(function ($r) use ($pendingOf) {
-                $parts = [];
-                if ($p = $pendingOf($r)) $parts[] = "{$p} pending";
-                if ($d = (int) $r->quantity_damaged) $parts[] = "{$d} damaged";
-                if ($m = (int) $r->quantity_missing) $parts[] = "{$m} missing";
-                if (!$parts) return null;
-                $name = $r->equipmentItem->name ?? 'Deleted item';
-                return $name . ' (' . implode(', ', $parts) . ')';
-            })->filter()->values();
+                $pending = (int) $equipment->sum($pendingOf);
+                $damaged = (int) $equipment->sum('quantity_damaged');
+                $missing = (int) $equipment->sum('quantity_missing');
+                $total = $pending + $damaged + $missing;
 
-            $severity = $missing > 0 ? 'critical' : ($damaged > 0 ? 'high' : ($pending > 0 ? 'medium' : 'low'));
+                // Items involved, e.g. "Dinner Plate (2 missing, 1 damaged) - Fiesta, Oct 14"
+                $items = $equipment->map(function ($r) use ($pendingOf) {
+                    $parts = [];
+                    if ($p = $pendingOf($r)) $parts[] = "{$p} pending";
+                    if ($d = (int) $r->quantity_damaged) $parts[] = "{$d} damaged";
+                    if ($m = (int) $r->quantity_missing) $parts[] = "{$m} missing";
+                    if (!$parts) return null;
+                    $name = $r->equipmentItem->name ?? 'Deleted item';
+                    $eventName = $r->event->event_name ?? 'Deleted event';
+                    $eventDate = $r->event?->event_date?->format('M d');
+                    return $name . ' (' . implode(', ', $parts) . ') - ' . $eventName . ($eventDate ? ', ' . $eventDate : '');
+                })->filter()->values();
 
-            return (object) compact('waiter', 'pending', 'damaged', 'missing', 'total', 'items', 'severity');
-        })->filter(fn ($row) => $row->total > 0)
-          ->sortByDesc(fn ($row) => [$row->missing, $row->damaged, $row->pending]) // most serious first
-          ->values();
+                $severity = $missing > 0 ? 'critical' : ($damaged > 0 ? 'high' : ($pending > 0 ? 'medium' : 'low'));
+
+                return (object) compact('waiter', 'pending', 'damaged', 'missing', 'total', 'items', 'severity');
+            })->filter(fn ($row) => $row->total > 0)
+              ->sortByDesc(fn ($row) => [$row->missing, $row->damaged, $row->pending]) // most serious first
+              ->values();
 
         $totals = [
             'waiters' => $rowsData->count(),
@@ -239,14 +254,14 @@
                     @forelse($rowsData as $row)
                         @php
                             $w = $row->waiter;
-                            $name = $w->user->name ?? 'Unknown';
+                            $name = $w ? ($w->user->name ?? 'Unknown') : 'Unassigned';
                             $sev = $severityConfig[$row->severity];
                         @endphp
                         <tr class="hover:bg-slate-50/50 transition">
                             <td class="px-4 py-2 text-xs text-slate-400">{{ $loop->iteration }}</td>
                             <td class="px-4 py-2">
                                 <div class="flex items-center gap-2.5">
-                                    @if($w->photo)
+                                    @if($w?->photo)
                                         <img src="{{ asset('storage/' . $w->photo) }}" alt="{{ $name }}"
                                             class="w-8 h-8 shrink-0 rounded-full object-cover bg-slate-100 no-print">
                                     @else
@@ -256,7 +271,7 @@
                                     @endif
                                     <div class="min-w-0">
                                         <p class="text-xs font-semibold text-slate-800 leading-tight">{{ $name }}</p>
-                                        <p class="text-[11px] text-slate-400 leading-tight">{{ $w->phone ?: ($w->user->email ?? '') }}</p>
+                                        <p class="text-[11px] text-slate-400 leading-tight">{{ $w?->phone ?: ($w?->user?->email ?? '') }}</p>
                                     </div>
                                 </div>
                             </td>
@@ -276,11 +291,13 @@
                             </td>
                             @if($canOpenProfile)
                                 <td class="px-4 py-2 text-right no-print">
-                                    <a href="{{ route('waiters.show', $w) }}"
-                                        class="w-7 h-7 rounded-md bg-blue-50 text-blue-600 inline-flex items-center justify-center hover:bg-blue-600 hover:text-white transition"
-                                        title="View Profile" aria-label="View Profile">
-                                        <i class="fas fa-user text-xs"></i>
-                                    </a>
+                                    @if($w)
+                                        <a href="{{ route('waiters.show', $w) }}"
+                                            class="w-7 h-7 rounded-md bg-blue-50 text-blue-600 inline-flex items-center justify-center hover:bg-blue-600 hover:text-white transition"
+                                            title="View Profile" aria-label="View Profile">
+                                            <i class="fas fa-user text-xs"></i>
+                                        </a>
+                                    @endif
                                 </td>
                             @endif
                         </tr>
