@@ -23,7 +23,8 @@ class EventController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('event_name', 'like', "%{$search}%")
-                    ->orWhere('venue_address', 'like', "%{$search}%");
+                    ->orWhere('venue_address', 'like', "%{$search}%")
+                    ->orWhere('customer_name', 'like', "%{$search}%");
             });
         }
 
@@ -45,6 +46,156 @@ class EventController extends Controller
         return view('events.index', compact('events'));
     }
 
+    /**
+     * JSON feed for the calendar view on the Events page.
+     * FullCalendar sends ?start=...&end=... for the visible range.
+     */
+    public function feed(Request $request)
+    {
+        $tz = config('app.timezone');
+        $start = Carbon::parse($request->query('start'))->setTimezone($tz);
+        $end = Carbon::parse($request->query('end'))->setTimezone($tz);
+
+        $query = Event::query()->whereBetween('event_date', [$start, $end]);
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('event_name', 'like', "%{$search}%")
+                    ->orWhere('venue_address', 'like', "%{$search}%")
+                    ->orWhere('customer_name', 'like', "%{$search}%");
+            });
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        return response()->json(
+            $query->get()->map(fn ($event) => [
+                'id' => $event->id,
+                'title' => $event->event_name,
+                'start' => $event->event_date->toIso8601String(),
+                'url' => route('events.show', $event),
+                'extendedProps' => [
+                    'status' => strtolower(trim((string) $event->status)),
+                    'venue' => $event->venue_address,
+                    'customer' => $event->customer_name,
+                ],
+            ])->values()
+        );
+    }
+
+    /**
+     * Availability check used by the create/edit forms.
+     * For one day: the other events scheduled that day, and which waiters are already assigned to them.
+     */
+    public function availability(Request $request)
+    {
+        $request->validate([
+            'date' => 'required|date',
+            'exclude' => 'nullable|integer',
+        ]);
+
+        $day = Carbon::parse($request->date)->toDateString();
+
+        $events = Event::whereDate('event_date', $day)
+            ->where(function ($q) {
+                $q->whereNull('status')->orWhere('status', '!=', 'cancelled');
+            })
+            ->when($request->filled('exclude'), fn ($q) => $q->where('id', '!=', $request->exclude))
+            ->with('waiters')
+            ->orderBy('event_date')
+            ->get();
+
+        // waiter id => list of events they are already on that day (declined waiters are free)
+        $busy = [];
+        foreach ($events as $event) {
+            foreach ($event->waiters as $waiter) {
+                $confirmation = strtolower(trim((string) $waiter->pivot->confirmation_status));
+                if ($confirmation === 'declined') {
+                    continue;
+                }
+
+                $busy[$waiter->id][] = [
+                    'event_id' => $event->id,
+                    'event_name' => $event->event_name,
+                    'time' => $event->event_date->format('h:i A'),
+                    'role' => $waiter->pivot->role,
+                    'confirmation' => $confirmation ?: 'pending',
+                ];
+            }
+        }
+
+        return response()->json([
+            'events' => $events->map(fn ($event) => [
+                'id' => $event->id,
+                'name' => $event->event_name,
+                'customer' => $event->customer_name,
+                'time' => $event->event_date->format('h:i A'),
+                'url' => route('events.show', $event),
+                'waiter_count' => $event->waiters->count(),
+            ])->values(),
+            'busy' => (object) $busy,
+        ]);
+    }
+
+    /**
+     * Waiters (from the given ids) who are already assigned to ANOTHER event on the same day.
+     * Cancelled events and waiters who declined do not count.
+     * Returns [waiter_id => ['name' => ..., 'event' => ..., 'time' => ...]]
+     */
+    private function waiterConflicts(array $waiterIds, $date, ?int $excludeEventId = null): array
+    {
+        if (empty($waiterIds)) {
+            return [];
+        }
+
+        $day = Carbon::parse($date)->toDateString();
+
+        $events = Event::whereDate('event_date', $day)
+            ->where(function ($q) {
+                $q->whereNull('status')->orWhere('status', '!=', 'cancelled');
+            })
+            ->when($excludeEventId, fn ($q) => $q->where('id', '!=', $excludeEventId))
+            ->with(['waiters' => function ($q) use ($waiterIds) {
+                $q->whereIn('waiters.id', $waiterIds)->with('user');
+            }])
+            ->get();
+
+        $conflicts = [];
+        foreach ($events as $other) {
+            foreach ($other->waiters as $waiter) {
+                if (strtolower(trim((string) $waiter->pivot->confirmation_status)) === 'declined') {
+                    continue;
+                }
+                $conflicts[$waiter->id] = [
+                    'name' => $waiter->user->name ?? 'A waiter',
+                    'event' => $other->event_name,
+                    'time' => $other->event_date->format('h:i A'),
+                ];
+            }
+        }
+
+        return $conflicts;
+    }
+
+    /** Stop the save (back to the form with an error) if any of these waiters is already busy that day. */
+    private function throwIfWaitersBusy(array $waiterIds, $date, ?int $excludeEventId = null): void
+    {
+        $conflicts = $this->waiterConflicts($waiterIds, $date, $excludeEventId);
+        if (!$conflicts) {
+            return;
+        }
+
+        $messages = collect($conflicts)
+            ->map(fn ($c) => "{$c['name']} is already assigned to \"{$c['event']}\" ({$c['time']}) on that day.")
+            ->values()
+            ->all();
+
+        throw \Illuminate\Validation\ValidationException::withMessages(['waiters' => $messages]);
+    }
+
     public function create()
     {
         $waiters = Waiter::where('status', 'active')->with('user')->get();
@@ -55,6 +206,7 @@ class EventController extends Controller
     {
         $validated = $request->validate([
             'event_name' => 'required|string|max:255',
+            'customer_name' => 'required|string|max:255',
             'venue_address' => 'required|string',
             'event_date' => 'required|date|after:now',
             'setup_time' => 'required|date|before:event_date',
@@ -65,8 +217,19 @@ class EventController extends Controller
             'waiters.*.role' => 'in:head_waiter,waiter,setup_crew',
         ]);
 
+        // A waiter who is already on another event that day cannot be assigned again
+        $this->throwIfWaitersBusy(
+            collect($validated['waiters'] ?? [])
+                ->filter(fn ($w) => !empty($w['id']))
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->all(),
+            $validated['event_date']
+        );
+
         $event = Event::create([
             'event_name' => $validated['event_name'],
+            'customer_name' => $validated['customer_name'],
             'venue_address' => $validated['venue_address'],
             'event_date' => $validated['event_date'],
             'setup_time' => $validated['setup_time'],
@@ -118,6 +281,7 @@ class EventController extends Controller
     {
         $validated = $request->validate([
             'event_name' => 'required|string|max:255',
+            'customer_name' => 'required|string|max:255',
             'venue_address' => 'required|string',
             'event_date' => 'required|date',
             'setup_time' => 'required|date',
@@ -129,10 +293,27 @@ class EventController extends Controller
             'waiters.*.role' => 'in:head_waiter,waiter,setup_crew',
         ]);
 
+        // A waiter who is already on another event that day cannot be assigned again.
+        // Check the newly added waiters (or everyone, if the event was moved to another day).
+        $submittedIds = collect($validated['waiters'] ?? [])
+            ->filter(fn ($w) => !empty($w['id']))
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+        $existingIds = $event->waiters()->pluck('waiters.id')->map(fn ($id) => (int) $id)->all();
+        $dayChanged = !$event->event_date
+            || $event->event_date->toDateString() !== Carbon::parse($validated['event_date'])->toDateString();
+        $this->throwIfWaitersBusy(
+            $dayChanged ? $submittedIds : array_values(array_diff($submittedIds, $existingIds)),
+            $validated['event_date'],
+            $event->id
+        );
+
         $oldDate = $event->event_date;
 
         $event->update([
             'event_name' => $validated['event_name'],
+            'customer_name' => $validated['customer_name'],
             'venue_address' => $validated['venue_address'],
             'event_date' => $validated['event_date'],
             'setup_time' => $validated['setup_time'],

@@ -22,9 +22,11 @@
     $isClosed  = in_array($status, ['returned', 'lost'], true);
     $pending   = $isClosed ? 0 : max(0, $allocated - $returned - $damaged - $missing);
 
-    $canEdit   = $status === 'allocated';
-    $canReturn = !$isClosed;
-    $canDelete = $status === 'allocated';
+    $readOnly  = auth()->user()->isOwner(); // owner: view only, no edit / return / delete
+
+    $canEdit   = !$readOnly && $status === 'allocated';
+    $canReturn = !$readOnly && !$isClosed;
+    $canDelete = !$readOnly && $status === 'allocated';
 
     $logConfig = [
         'allocated' => ['bg-blue-50 text-blue-700 ring-blue-600/20', 'Allocated'],
@@ -263,7 +265,7 @@
                         </div>
                     </div>
 
-                    @if($canReturn && $pending > 0)
+                    @if(!$isClosed && $pending > 0)
                         <p class="mt-3 text-xs text-slate-500 text-center">
                             {{ $pending }} {{ \Illuminate\Support\Str::plural('unit', $pending) }} still to be returned.
                         </p>

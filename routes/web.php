@@ -22,7 +22,7 @@ Route::get('/api/barangays/{cityId}', [WaiterController::class, 'getBarangays'])
 
 Route::middleware(['auth'])->group(function () {
 
-    // ==================== DASHBOARD (both roles) ====================
+    // ==================== DASHBOARD (admin, owner, waiter) ====================
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     // ==================== WAITER-ONLY: MY PROFILE ====================
@@ -103,15 +103,56 @@ Route::middleware(['auth'])->group(function () {
         return app(WaiterController::class)->updateMyEmail($request);
     })->name('waiters.update-email');
 
+    // ==================== OWNER-ONLY: MY ACCOUNT (change password) ====================
+    Route::get('/owner/account', function () {
+        if (!auth()->user()->isOwner()) {
+            abort(403, 'Owner access only.');
+        }
+        return view('owner.account');
+    })->name('owner.account');
+
+    Route::post('/owner/account/password', function (Request $request) {
+        if (!auth()->user()->isOwner()) {
+            abort(403, 'Owner access only.');
+        }
+
+        $validated = $request->validate([
+            'current_password' => 'required|string',
+            'new_password' => 'required|string|min:6|confirmed',
+        ]);
+
+        if (!\Illuminate\Support\Facades\Hash::check($validated['current_password'], auth()->user()->password)) {
+            return back()->with('password_error', 'Current password is incorrect.');
+        }
+
+        auth()->user()->update([
+            'password' => \Illuminate\Support\Facades\Hash::make($validated['new_password']),
+        ]);
+
+        return back()->with('password_success', 'Password changed successfully!');
+    })->name('owner.change-password');
+
     // ==================== ADMIN-ONLY ROUTES ====================
     Route::group([], function () {
 
         // Events
         Route::get('/events', function (Request $request) {
-            if (!auth()->user()->isAdmin())
+            if (!auth()->user()->canMonitor())
                 abort(403, 'Admin access only.');
             return app(EventController::class)->index($request);
         })->name('events.index');
+        // Calendar feed (must stay above /events/{event} so "feed" is not read as an event id)
+        Route::get('/events/feed', function (Request $request) {
+            if (!auth()->user()->canMonitor())
+                abort(403, 'Admin access only.');
+            return app(EventController::class)->feed($request);
+        })->name('events.feed');
+        // Waiter availability for a day (used by the create/edit forms; above /events/{event} on purpose)
+        Route::get('/events/availability', function (Request $request) {
+            if (!auth()->user()->isAdmin())
+                abort(403, 'Admin access only.');
+            return app(EventController::class)->availability($request);
+        })->name('events.availability');
         Route::get('/events/create', function () {
             if (!auth()->user()->isAdmin())
                 abort(403, 'Admin access only.');
@@ -123,7 +164,7 @@ Route::middleware(['auth'])->group(function () {
             return app(EventController::class)->store($request);
         })->name('events.store');
         Route::get('/events/{event}', function (\App\Models\Event $event) {
-            if (!auth()->user()->isAdmin())
+            if (!auth()->user()->canMonitor())
                 abort(403, 'Admin access only.');
             return app(EventController::class)->show($event);
         })->name('events.show');
@@ -152,6 +193,12 @@ Route::middleware(['auth'])->group(function () {
                 abort(403, 'Admin access only.');
             return app(WaiterController::class)->index(request());
         })->name('waiters.index');
+        // Calendar feed for the Waiters page (above /waiters/{waiter} on purpose)
+        Route::get('/waiters/calendar-feed', function (Request $request) {
+            if (!auth()->user()->isAdmin())
+                abort(403, 'Admin access only.');
+            return app(WaiterController::class)->calendarFeed($request);
+        })->name('waiters.feed');
         Route::get('/waiters/create', function () {
             if (!auth()->user()->isAdmin())
                 abort(403, 'Admin access only.');
@@ -185,7 +232,7 @@ Route::middleware(['auth'])->group(function () {
 
         // Equipment Categories
         Route::get('/equipment-categories', function (Request $request) {
-            if (!auth()->user()->isAdmin())
+            if (!auth()->user()->canMonitor())
                 abort(403);
             return app(EquipmentCategoryController::class)->index($request);
         })->name('equipment-categories.index');
@@ -200,7 +247,7 @@ Route::middleware(['auth'])->group(function () {
             return app(EquipmentCategoryController::class)->store($request);
         })->name('equipment-categories.store');
         Route::get('/equipment-categories/{equipmentCategory}', function (\App\Models\EquipmentCategory $equipmentCategory) {
-            if (!auth()->user()->isAdmin())
+            if (!auth()->user()->canMonitor())
                 abort(403);
             return app(EquipmentCategoryController::class)->show($equipmentCategory);
         })->name('equipment-categories.show');
@@ -222,7 +269,7 @@ Route::middleware(['auth'])->group(function () {
 
         // Equipment Items
         Route::get('/equipment-items', function (Request $request) {
-            if (!auth()->user()->isAdmin())
+            if (!auth()->user()->canMonitor())
                 abort(403);
             return app(EquipmentItemController::class)->index($request);
         })->name('equipment-items.index');
@@ -237,7 +284,7 @@ Route::middleware(['auth'])->group(function () {
             return app(EquipmentItemController::class)->store($request);
         })->name('equipment-items.store');
         Route::get('/equipment-items/{equipmentItem}', function (\App\Models\EquipmentItem $equipmentItem) {
-            if (!auth()->user()->isAdmin())
+            if (!auth()->user()->canMonitor())
                 abort(403);
             return app(EquipmentItemController::class)->show($equipmentItem);
         })->name('equipment-items.show');
@@ -259,7 +306,7 @@ Route::middleware(['auth'])->group(function () {
 
         // Event Equipment Allocations
         Route::get('/event-equipment', function (Request $request) {
-            if (!auth()->user()->isAdmin())
+            if (!auth()->user()->canMonitor())
                 abort(403);
             return app(EventEquipmentController::class)->index($request);
         })->name('event-equipment.index');
@@ -274,7 +321,7 @@ Route::middleware(['auth'])->group(function () {
             return app(EventEquipmentController::class)->store($request);
         })->name('event-equipment.store');
         Route::get('/event-equipment/{eventEquipment}', function (\App\Models\EventEquipment $eventEquipment) {
-            if (!auth()->user()->isAdmin())
+            if (!auth()->user()->canMonitor())
                 abort(403);
             return app(EventEquipmentController::class)->show($eventEquipment);
         })->name('event-equipment.show');
@@ -314,42 +361,142 @@ Route::middleware(['auth'])->group(function () {
 
         // Equipment Logs (admin view)
         Route::get('/equipment-logs', function (Request $request) {
-            if (!auth()->user()->isAdmin())
+            if (!auth()->user()->canMonitor())
                 abort(403);
             return app(EquipmentLogController::class)->index($request);
         })->name('equipment-logs.index');
         Route::get('/equipment-logs/{equipmentLog}', function (\App\Models\EquipmentLog $equipmentLog) {
-            if (!auth()->user()->isAdmin())
+            if (!auth()->user()->canMonitor())
                 abort(403);
             return app(EquipmentLogController::class)->show($equipmentLog);
         })->name('equipment-logs.show');
 
-        // Reports (admin only)
+        // Reports (admin + owner: read-only monitoring)
         Route::get('/reports', function () {
-            if (!auth()->user()->isAdmin())
+            if (!auth()->user()->canMonitor())
                 abort(403);
             return app(ReportController::class)->index();
         })->name('reports.index');
         Route::get('/reports/events', function (Request $request) {
-            if (!auth()->user()->isAdmin())
+            if (!auth()->user()->canMonitor())
                 abort(403);
             return app(ReportController::class)->events($request);
         })->name('reports.events');
         Route::get('/reports/equipment', function (Request $request) {
-            if (!auth()->user()->isAdmin())
+            if (!auth()->user()->canMonitor())
                 abort(403);
             return app(ReportController::class)->equipmentUsage($request);
         })->name('reports.equipment');
         Route::get('/reports/accountability', function (Request $request) {
-            if (!auth()->user()->isAdmin())
+            if (!auth()->user()->canMonitor())
                 abort(403);
             return app(ReportController::class)->accountability($request);
         })->name('reports.accountability');
         Route::get('/reports/equipment-logs', function (Request $request) {
-            if (!auth()->user()->isAdmin())
+            if (!auth()->user()->canMonitor())
                 abort(403);
             return app(ReportController::class)->equipmentLogs($request);
         })->name('reports.equipment-logs');
+
+        // Dashboard popups (admin + owner): full details of one event / one equipment item, loaded when a row is opened
+        Route::get('/dashboard/events/{event}', function (\App\Models\Event $event) {
+            if (!auth()->user()->canMonitor())
+                abort(403);
+
+            $event->load(['waiters.user', 'equipment.equipmentItem', 'equipment.assignedWaiter.user']);
+
+            $roleLabels = ['waiter' => 'Waiter', 'head_waiter' => 'Head Waiter', 'setup_crew' => 'Setup Crew'];
+            $fmt = fn ($v, $format) => $v ? \Carbon\Carbon::parse($v)->format($format) : null;
+
+            $waiters = $event->waiters->map(function ($w) use ($roleLabels, $fmt) {
+                $in = $w->pivot->time_in ? \Carbon\Carbon::parse($w->pivot->time_in) : null;
+                $out = $w->pivot->time_out ? \Carbon\Carbon::parse($w->pivot->time_out) : null;
+                $hours = null;
+                if ($in && $out) {
+                    if ($out->lt($in)) {
+                        $out = $out->copy()->addDay(); // shift that ended after midnight
+                    }
+                    $mins = (int) round(abs($in->diffInMinutes($out)));
+                    $hours = intdiv($mins, 60) . 'h ' . ($mins % 60) . 'm';
+                }
+
+                return [
+                    'name' => $w->user->name ?? 'Unknown',
+                    'phone' => $w->phone,
+                    'role' => $roleLabels[$w->pivot->role] ?? ucfirst(str_replace('_', ' ', (string) $w->pivot->role)),
+                    'conf' => strtolower(trim((string) $w->pivot->confirmation_status)) ?: 'pending',
+                    'reason' => $w->pivot->decline_reason ?? null,
+                    'timeIn' => $fmt($w->pivot->time_in, 'M d, h:i A'),
+                    'timeOut' => $fmt($w->pivot->time_out, 'M d, h:i A'),
+                    'hours' => $hours,
+                ];
+            })->values();
+
+            $equipment = $event->equipment->map(fn ($a) => [
+                'item' => $a->equipmentItem->name ?? 'Deleted item',
+                'code' => $a->equipmentItem->serial_code ?? null,
+                'assignee' => $a->assignedWaiter->user->name ?? 'Unassigned',
+                'qty' => (int) $a->quantity_allocated,
+                'returned' => (int) $a->quantity_returned,
+                'damaged' => (int) $a->quantity_damaged,
+                'missing' => (int) $a->quantity_missing,
+                'status' => strtolower(trim((string) $a->status)),
+                'notes' => $a->notes,
+            ])->values();
+
+            return response()->json([
+                'event' => [
+                    'id' => $event->id,
+                    'name' => $event->event_name,
+                    'customer' => $event->customer_name,
+                    'venue' => $event->venue_address,
+                    'dateLabel' => optional($event->event_date)->format('l, M d, Y'),
+                    'time' => optional($event->event_date)->format('h:i A'),
+                    'status' => strtolower(trim((string) $event->status)) ?: 'scheduled',
+                ],
+                'waiters' => $waiters,
+                'equipment' => $equipment,
+            ]);
+        })->name('dashboard.event-details');
+
+        Route::get('/dashboard/items/{equipmentItem}', function (\App\Models\EquipmentItem $equipmentItem) {
+            if (!auth()->user()->canMonitor())
+                abort(403);
+
+            $equipmentItem->load('category');
+
+            $history = \App\Models\EventEquipment::where('equipment_item_id', $equipmentItem->id)
+                ->with(['event', 'assignedWaiter.user'])
+                ->latest()->limit(20)->get()
+                ->map(fn ($a) => [
+                    'event' => $a->event->event_name ?? 'Deleted event',
+                    'dateLabel' => optional(optional($a->event)->event_date)->format('M d, Y'),
+                    'waiter' => $a->assignedWaiter->user->name ?? 'Unassigned',
+                    'qty' => (int) $a->quantity_allocated,
+                    'returned' => (int) $a->quantity_returned,
+                    'damaged' => (int) $a->quantity_damaged,
+                    'missing' => (int) $a->quantity_missing,
+                    'status' => strtolower(trim((string) $a->status)),
+                ])->values();
+
+            $total = (int) $equipmentItem->total_quantity;
+            $available = (int) $equipmentItem->available_quantity;
+
+            return response()->json([
+                'item' => [
+                    'id' => $equipmentItem->id,
+                    'name' => $equipmentItem->name,
+                    'code' => $equipmentItem->serial_code,
+                    'category' => $equipmentItem->category->name ?? 'Uncategorized',
+                    'total' => $total,
+                    'available' => $available,
+                    'inUse' => max($total - $available, 0),
+                    'condition' => strtolower(trim((string) $equipmentItem->condition)),
+                    'low' => $total > 0 && ($available * 100) < ($total * 20), // same rule as the "Low Stock" filter
+                ],
+                'history' => $history,
+            ]);
+        })->name('dashboard.item-details');
 
         // Check-in and Check-out
         Route::post('/events/{event}/waiters/{waiter}/time', function (Request $request, \App\Models\Event $event, \App\Models\Waiter $waiter) {

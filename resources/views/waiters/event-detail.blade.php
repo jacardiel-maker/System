@@ -138,6 +138,16 @@
                             </div>
                         </div>
 
+                        <div class="flex items-start gap-3">
+                            <div class="w-8 h-8 shrink-0 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
+                                <i class="fas fa-user-tie text-xs"></i>
+                            </div>
+                            <div class="min-w-0">
+                                <p class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Customer</p>
+                                <p class="text-sm font-semibold text-slate-800 leading-tight break-words">{{ $event->customer_name ?: '—' }}</p>
+                            </div>
+                        </div>
+
                         @if($event->guest_count)
                             <div class="flex items-start gap-3">
                                 <div class="w-8 h-8 shrink-0 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">

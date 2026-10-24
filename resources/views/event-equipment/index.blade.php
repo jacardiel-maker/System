@@ -3,6 +3,7 @@
 
 @section('content')
     @php
+        $readOnly = auth()->user()->isOwner(); // owner can view allocations but not change them
         $waiters = \App\Models\Waiter::where('status', 'active')->with('user')->get()
             ->sortBy(fn ($w) => $w->user->name ?? '')->values();
 
@@ -33,12 +34,14 @@
     <div class="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
             <h1 class="text-2xl font-bold text-slate-800 leading-tight">Equipment Allocations</h1>
-            <p class="text-slate-400 text-sm">Track equipment assigned to events and waiters</p>
+            <p class="text-slate-400 text-sm">{{ $readOnly ? 'Monitor equipment assigned to events and waiters' : 'Track equipment assigned to events and waiters' }}</p>
         </div>
+        @unless($readOnly)
         <a href="{{ route('event-equipment.create') }}"
             class="text-white px-4 py-2 rounded-lg text-sm font-semibold inline-flex items-center gap-2 self-start bg-amber-600 hover:bg-amber-700 transition">
             <i class="fas fa-plus text-xs"></i> New Allocation
         </a>
+        @endunless
     </div>
 
     {{-- Search & Filter Bar --}}
@@ -231,6 +234,7 @@
                                         title="View" aria-label="View">
                                         <i class="fas fa-eye text-xs"></i>
                                     </a>
+                                    @unless($readOnly)
                                     @if(!in_array($status, ['returned', 'lost']))
                                         <button type="button"
                                             onclick="openReturnModal({{ $alloc->id }}, {{ json_encode($itemName) }}, {{ $qty }})"
@@ -256,6 +260,7 @@
                                             </button>
                                         </form>
                                     @endif
+                                    @endunless
                                 </div>
                             </td>
                         </tr>
@@ -266,7 +271,7 @@
                                 <p class="text-xs">No allocations found matching your criteria.</p>
                                 @if($hasFilters)
                                     <a href="{{ route('event-equipment.index') }}" class="text-amber-600 hover:underline text-xs inline-block mt-1">Clear filters</a>
-                                @else
+                                @elseif(!$readOnly)
                                     <a href="{{ route('event-equipment.create') }}" class="text-amber-600 hover:underline text-xs inline-block mt-1">Create your first allocation</a>
                                 @endif
                             </td>

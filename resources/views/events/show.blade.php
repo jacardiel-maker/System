@@ -27,13 +27,24 @@
         ];
 
         $roleLabels = ['waiter' => 'Waiter', 'head_waiter' => 'Head Waiter', 'setup_crew' => 'Setup Crew'];
+
+        $readOnly = auth()->user()->isOwner(); // owner: view only, no edit / delete / allocate / attendance
+
+        // The owner has no Events page in the sidebar; he reaches an event from the Event Report,
+        // so Back / breadcrumb return there. Admin keeps going to the Events list.
+        $backUrl   = $readOnly ? route('reports.events') : route('events.index');
+        $backLabel = $readOnly ? 'Event Report' : 'Events';
     @endphp
 
     {{-- Header --}}
     <div class="mb-4 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div class="min-w-0">
             <div class="flex items-center gap-1.5 text-xs text-slate-400 mb-1">
-                <a href="{{ route('events.index') }}" class="hover:text-amber-700 transition-colors">Events</a>
+                @if($readOnly)
+                    <a href="{{ route('reports.index') }}" class="hover:text-amber-700 transition-colors">Reports</a>
+                    <i class="fas fa-chevron-right text-[9px]"></i>
+                @endif
+                <a href="{{ $backUrl }}" class="hover:text-amber-700 transition-colors">{{ $backLabel }}</a>
                 <i class="fas fa-chevron-right text-[9px]"></i>
                 <span class="text-slate-600 font-medium truncate">{{ $event->event_name }}</span>
             </div>
@@ -43,10 +54,11 @@
             </div>
         </div>
         <div class="flex items-center gap-2 shrink-0">
-            <a href="{{ route('events.index') }}"
+            <a href="{{ $backUrl }}"
                 class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition">
                 <i class="fas fa-arrow-left text-xs"></i> Back
             </a>
+            @unless($readOnly)
             <a href="{{ route('events.edit', $event) }}"
                 class="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 transition">
                 <i class="fas fa-pen text-xs"></i> Edit
@@ -60,6 +72,7 @@
                     <i class="fas fa-trash text-xs"></i> Delete
                 </button>
             </form>
+            @endunless
         </div>
     </div>
 
@@ -93,6 +106,16 @@
                                 <p class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Setup Time</p>
                                 <p class="text-sm font-semibold text-slate-800 leading-tight">{{ $event->setup_time?->format('F d, Y') ?? '—' }}</p>
                                 <p class="text-xs text-slate-500">{{ $event->setup_time?->format('h:i A') }}</p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-start gap-3 sm:col-span-2">
+                            <div class="w-8 h-8 shrink-0 rounded-lg bg-violet-50 flex items-center justify-center text-violet-600">
+                                <i class="fas fa-user text-xs"></i>
+                            </div>
+                            <div class="min-w-0">
+                                <p class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Customer</p>
+                                <p class="text-sm font-semibold text-slate-800 leading-snug break-words">{{ $event->customer_name ?: '—' }}</p>
                             </div>
                         </div>
 
@@ -135,10 +158,12 @@
                         <h2 class="text-sm font-bold text-slate-800">Equipment Allocations</h2>
                         <p class="text-xs text-slate-400">{{ $event->equipment->count() }} {{ Str::plural('item', $event->equipment->count()) }} allocated</p>
                     </div>
+                    @unless($readOnly)
                     <a href="{{ route('event-equipment.create', ['event_id' => $event->id]) }}"
                         class="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 transition">
                         <i class="fas fa-plus text-[10px]"></i> Allocate
                     </a>
+                    @endunless
                 </div>
 
                 @if($event->equipment->count() > 0)
@@ -150,7 +175,7 @@
                                     <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Assigned To</th>
                                     <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Qty</th>
                                     <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Status</th>
-                                    <th class="px-4 py-2 text-right text-[11px] font-bold text-slate-400 uppercase tracking-wider">Actions</th>
+                                    <th class="px-4 py-2 text-right text-[11px] font-bold text-slate-400 uppercase tracking-wider">{{ $readOnly ? 'Details' : 'Actions' }}</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-50">
@@ -178,6 +203,7 @@
                                                     title="View" aria-label="View">
                                                     <i class="fas fa-eye text-xs"></i>
                                                 </a>
+                                                @unless($readOnly)
                                                 @if(!in_array($eqStatus, ['returned', 'lost']))
                                                     <button type="button"
                                                         onclick="openReturnModal({{ $eq->id }}, {{ json_encode($itemName) }}, {{ $qty }})"
@@ -203,6 +229,7 @@
                                                         </button>
                                                     </form>
                                                 @endif
+                                                @endunless
                                             </div>
                                         </td>
                                     </tr>
@@ -214,7 +241,7 @@
                     <div class="px-4 py-8 text-center text-slate-400">
                         <i class="fas fa-box-open text-2xl mb-2 text-slate-200 block"></i>
                         <p class="text-xs">No equipment allocated yet.</p>
-                        <a href="{{ route('event-equipment.create', ['event_id' => $event->id]) }}" class="text-amber-600 hover:underline text-xs inline-block mt-1">Allocate equipment</a>
+                        @unless($readOnly)<a href="{{ route('event-equipment.create', ['event_id' => $event->id]) }}" class="text-amber-600 hover:underline text-xs inline-block mt-1">Allocate equipment</a>@endunless
                     </div>
                 @endif
             </div>
@@ -259,7 +286,22 @@
                             @endif
 
                             {{-- Attendance: only confirmed waiters can have Time In / Time Out --}}
-                            @if($conf === 'confirmed')
+                            @if($conf === 'confirmed' && $readOnly)
+                                @php
+                                    $tIn  = $waiter->pivot->time_in  ? \Carbon\Carbon::parse($waiter->pivot->time_in)->format('M d, h:i A')  : '—';
+                                    $tOut = $waiter->pivot->time_out ? \Carbon\Carbon::parse($waiter->pivot->time_out)->format('M d, h:i A') : '—';
+                                @endphp
+                                <div class="px-3 py-2 border-t border-slate-100 bg-slate-50/40 grid grid-cols-2 gap-2">
+                                    <div>
+                                        <p class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Time In</p>
+                                        <p class="text-[11px] text-slate-700 font-medium">{{ $tIn }}</p>
+                                    </div>
+                                    <div>
+                                        <p class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Time Out</p>
+                                        <p class="text-[11px] text-slate-700 font-medium">{{ $tOut }}</p>
+                                    </div>
+                                </div>
+                            @elseif($conf === 'confirmed')
                             <form action="{{ route('events.waiter.time', [$event, $waiter]) }}" method="POST" class="px-3 pb-3 pt-2 border-t border-slate-100 bg-slate-50/40">
                                 @csrf
                                 <div class="grid grid-cols-2 gap-2">
@@ -292,7 +334,7 @@
                         <div class="py-6 text-center text-slate-400">
                             <i class="fas fa-users text-2xl mb-2 text-slate-200 block"></i>
                             <p class="text-xs">No waiters assigned yet.</p>
-                            <a href="{{ route('events.edit', $event) }}" class="text-amber-600 hover:underline text-xs inline-block mt-1">Assign waiters</a>
+                            @unless($readOnly)<a href="{{ route('events.edit', $event) }}" class="text-amber-600 hover:underline text-xs inline-block mt-1">Assign waiters</a>@endunless
                         </div>
                     @endforelse
                 </div>

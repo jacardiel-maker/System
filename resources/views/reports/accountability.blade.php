@@ -59,6 +59,11 @@
             'medium'   => ['bg-yellow-100 text-yellow-700', 'Medium', 'bg-yellow-500', '50%'],
             'low'      => ['bg-green-100 text-green-700', 'Low', 'bg-green-500', '25%'],
         ];
+
+        // Only the admin can open a waiter's profile. The owner is view-only, so the
+        // Actions column (and its link to the admin-only profile page) is hidden for them.
+        $canOpenProfile = auth()->user()->isAdmin();
+        $colCount = $canOpenProfile ? 8 : 7;
     @endphp
 
     <style>
@@ -225,7 +230,9 @@
                         <th class="px-3 py-2 text-center text-[11px] font-bold text-slate-400 uppercase tracking-wider">Damaged</th>
                         <th class="px-3 py-2 text-center text-[11px] font-bold text-slate-400 uppercase tracking-wider">Missing</th>
                         <th class="px-3 py-2 text-center text-[11px] font-bold text-slate-400 uppercase tracking-wider">Severity</th>
-                        <th class="px-4 py-2 text-right text-[11px] font-bold text-slate-400 uppercase tracking-wider no-print">Actions</th>
+                        @if($canOpenProfile)
+                            <th class="px-4 py-2 text-right text-[11px] font-bold text-slate-400 uppercase tracking-wider no-print">Actions</th>
+                        @endif
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-50">
@@ -267,17 +274,19 @@
                                     <div class="h-full rounded-full {{ $sev[2] }}" style="width: {{ $sev[3] }}"></div>
                                 </div>
                             </td>
-                            <td class="px-4 py-2 text-right no-print">
-                                <a href="{{ route('waiters.show', $w) }}"
-                                    class="w-7 h-7 rounded-md bg-blue-50 text-blue-600 inline-flex items-center justify-center hover:bg-blue-600 hover:text-white transition"
-                                    title="View Profile" aria-label="View Profile">
-                                    <i class="fas fa-user text-xs"></i>
-                                </a>
-                            </td>
+                            @if($canOpenProfile)
+                                <td class="px-4 py-2 text-right no-print">
+                                    <a href="{{ route('waiters.show', $w) }}"
+                                        class="w-7 h-7 rounded-md bg-blue-50 text-blue-600 inline-flex items-center justify-center hover:bg-blue-600 hover:text-white transition"
+                                        title="View Profile" aria-label="View Profile">
+                                        <i class="fas fa-user text-xs"></i>
+                                    </a>
+                                </td>
+                            @endif
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="px-4 py-10 text-center">
+                            <td colspan="{{ $colCount }}" class="px-4 py-10 text-center">
                                 <div class="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-2 no-print">
                                     <i class="fas fa-check-circle text-green-500 text-2xl"></i>
                                 </div>
@@ -295,7 +304,9 @@
                             <td class="px-3 py-2 text-xs text-center font-bold text-orange-600">{{ $totals['damaged'] }}</td>
                             <td class="px-3 py-2 text-xs text-center font-bold text-red-600">{{ $totals['missing'] }}</td>
                             <td class="px-3 py-2"></td>
-                            <td class="px-4 py-2 no-print"></td>
+                            @if($canOpenProfile)
+                                <td class="px-4 py-2 no-print"></td>
+                            @endif
                         </tr>
                     </tfoot>
                 @endif

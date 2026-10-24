@@ -107,10 +107,10 @@
                 </div>
 
                 <div class="space-y-1.5">
-                    <label class="block text-sm font-semibold text-slate-700">Serial Code <span class="text-slate-400 font-normal">(Optional)</span></label>
+                    <label class="block text-sm font-semibold text-slate-700">Item Code <span class="text-slate-400 font-normal">(Optional)</span></label>
                     <input type="text" name="serial_code" value="{{ old('serial_code') }}"
                         class="w-full rounded-xl border-slate-200 bg-slate-50/50 px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/20 transition-all @error('serial_code') border-rose-500 focus:border-rose-500 focus:ring-rose-500/20 @enderror"
-                        placeholder="e.g., SN-2024-001">
+                        placeholder="e.g., CHR-001">
                     @error('serial_code')<p class="text-xs text-rose-600 font-medium">{{ $message }}</p>@enderror
                 </div>
 

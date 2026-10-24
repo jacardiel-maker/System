@@ -323,6 +323,17 @@
 
                     </a>
 
+                @elseif(auth()->user()->isOwner())
+
+                    {{-- Owner: monitoring only. Dashboard (above) + Reports. --}}
+                    <a href="{{ route('reports.index') }}"
+                        class="sidebar-link {{ request()->routeIs('reports.*') ? 'active' : '' }} flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-slate-600">
+
+                        <i class="fas fa-chart-pie w-5 text-center"></i>
+                        Reports
+
+                    </a>
+
                 @else
 
                     <a href="{{ route('waiters.my-profile') }}"
@@ -409,6 +420,7 @@
 
                 </button>
 
+                @unless(auth()->user()->isOwner())
                 <a href="{{ route('notifications.index') }}"
                     class="relative p-2 rounded-full hover:bg-slate-100 transition text-slate-500">
 
@@ -426,6 +438,7 @@
                     @endif
 
                 </a>
+                @endunless
 
             </header>
 

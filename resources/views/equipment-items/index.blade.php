@@ -3,6 +3,7 @@
 
 @section('content')
     @php
+        $readOnly = auth()->user()->isOwner(); // owner can monitor stock but not change it
         $categories = \App\Models\EquipmentCategory::orderBy('name')->get();
         $lowStockPercent = 20; // Low Stock = available below 20% of total (TC-INV-A06)
 
@@ -27,25 +28,27 @@
     <div class="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
             <h1 class="text-2xl font-bold text-slate-800 leading-tight">Equipment Inventory</h1>
-            <p class="text-slate-400 text-sm">Track all catering equipment and stock levels</p>
+            <p class="text-slate-400 text-sm">{{ $readOnly ? 'Monitor all catering equipment and stock levels' : 'Track all catering equipment and stock levels' }}</p>
         </div>
+        @unless($readOnly)
         <a href="{{ route('equipment-items.create') }}"
             class="text-white px-4 py-2 rounded-lg text-sm font-semibold inline-flex items-center gap-2 self-start bg-amber-600 hover:bg-amber-700 transition">
             <i class="fas fa-plus text-xs"></i> Add Item
         </a>
+        @endunless
     </div>
 
     {{-- Search & Filter Bar --}}
     <div class="bg-white rounded-xl border border-slate-100 shadow-sm p-3 mb-3">
         <form action="{{ route('equipment-items.index') }}" method="GET" class="flex flex-col lg:flex-row gap-2 lg:items-end">
 
-            {{-- Search by name or serial --}}
+            {{-- Search by name or item code --}}
             <div class="flex-1 w-full">
                 <label for="f-search" class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Search</label>
                 <div class="relative">
                     <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none"></i>
                     <input id="f-search" type="text" name="search" value="{{ request('search') }}"
-                        placeholder="Search item name or serial code..."
+                        placeholder="Search item name or item code..."
                         class="w-full pl-9 pr-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent">
                 </div>
             </div>
@@ -151,7 +154,7 @@
                     <tr class="bg-slate-50/50 border-b border-slate-100">
                         <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Item</th>
                         <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Category</th>
-                        <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Serial</th>
+                        <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Item Code</th>
                         <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Stock</th>
                         <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Condition</th>
                         <th class="px-4 py-2 text-right text-[11px] font-bold text-slate-400 uppercase tracking-wider">Actions</th>
@@ -220,6 +223,7 @@
                                         title="View" aria-label="View">
                                         <i class="fas fa-eye text-xs"></i>
                                     </a>
+                                    @unless($readOnly)
                                     <a href="{{ route('equipment-items.edit', $item) }}"
                                         class="w-7 h-7 rounded-md bg-amber-50 text-amber-600 flex items-center justify-center hover:bg-amber-600 hover:text-white transition"
                                         title="Edit" aria-label="Edit">
@@ -235,6 +239,7 @@
                                             <i class="fas fa-trash text-xs"></i>
                                         </button>
                                     </form>
+                                    @endunless
                                 </div>
                             </td>
                         </tr>
@@ -245,7 +250,7 @@
                                 <p class="text-xs">No equipment items found matching your criteria.</p>
                                 @if($hasFilters)
                                     <a href="{{ route('equipment-items.index') }}" class="text-amber-600 hover:underline text-xs inline-block mt-1">Clear filters</a>
-                                @else
+                                @elseif(!$readOnly)
                                     <a href="{{ route('equipment-items.create') }}" class="text-amber-600 hover:underline text-xs inline-block mt-1">Add your first item</a>
                                 @endif
                             </td>

@@ -3,6 +3,7 @@
 
 @section('content')
     @php
+        $readOnly = auth()->user()->isOwner(); // owner can view categories but not change them
         $sortLabels = ['latest' => 'Latest First', 'name' => 'Name (A-Z)', 'items' => 'Most Items'];
         $currentSort = strtolower((string) request('sort', 'latest'));
         $sortIsCustom = request('sort') && $currentSort !== 'latest';
@@ -17,12 +18,14 @@
     <div class="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
             <h1 class="text-2xl font-bold text-slate-800 leading-tight">Equipment Categories</h1>
-            <p class="text-slate-400 text-sm">Organize and manage your inventory categories</p>
+            <p class="text-slate-400 text-sm">{{ $readOnly ? 'Browse your inventory categories' : 'Organize and manage your inventory categories' }}</p>
         </div>
+        @unless($readOnly)
         <a href="{{ route('equipment-categories.create') }}"
             class="text-white px-4 py-2 rounded-lg text-sm font-semibold inline-flex items-center gap-2 self-start bg-amber-600 hover:bg-amber-700 transition">
             <i class="fas fa-plus text-xs"></i> Add Category
         </a>
+        @endunless
     </div>
 
     {{-- Search & Filter Bar --}}
@@ -145,6 +148,7 @@
                                         title="View" aria-label="View">
                                         <i class="fas fa-eye text-xs"></i>
                                     </a>
+                                    @unless($readOnly)
                                     <a href="{{ route('equipment-categories.edit', $category) }}"
                                         class="w-7 h-7 rounded-md bg-amber-50 text-amber-600 flex items-center justify-center hover:bg-amber-600 hover:text-white transition"
                                         title="Edit" aria-label="Edit">
@@ -160,6 +164,7 @@
                                             <i class="fas fa-trash text-xs"></i>
                                         </button>
                                     </form>
+                                    @endunless
                                 </div>
                             </td>
                         </tr>
@@ -170,7 +175,7 @@
                                 <p class="text-xs">No categories found matching your criteria.</p>
                                 @if($hasFilters)
                                     <a href="{{ route('equipment-categories.index') }}" class="text-amber-600 hover:underline text-xs inline-block mt-1">Clear filters</a>
-                                @else
+                                @elseif(!$readOnly)
                                     <a href="{{ route('equipment-categories.create') }}" class="text-amber-600 hover:underline text-xs inline-block mt-1">Add your first category</a>
                                 @endif
                             </td>

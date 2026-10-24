@@ -27,12 +27,45 @@
         ];
         $roleLabels = ['waiter' => 'Waiter', 'head_waiter' => 'Head Waiter', 'setup_crew' => 'Setup Crew'];
 
-        $events = $waiter->events->sortByDesc('event_date');
+        // Work History = events that are already over, plus any event I declined (even a future one, so it is on record).
+        // Upcoming events I still have to attend live on the Dashboard under "Next Up".
+        $today = now()->startOfDay();
+        $events = $waiter->events
+            ->filter(fn ($e) => $e->event_date && (
+                $e->event_date->lt($today)
+                || strtolower(trim((string) $e->pivot->confirmation_status)) === 'declined'
+            ))
+            ->sortByDesc('event_date')
+            ->values();
+
+        // Minutes worked = Check Out minus Check In, exactly as recorded. No check-in or no check-out
+        // (or a check-out earlier than the check-in) means no hours -- nothing is guessed.
+        $minutesWorked = function ($event) {
+            $in = $event->pivot->time_in;
+            $out = $event->pivot->time_out;
+            if (!$in || !$out) {
+                return null;
+            }
+            try {
+                $start = \Carbon\Carbon::parse($in);
+                $end = \Carbon\Carbon::parse($out);
+            } catch (\Throwable $e) {
+                return null;
+            }
+            if ($end->lt($start)) {
+                return null;
+            }
+            return intdiv($end->timestamp - $start->timestamp, 60);
+        };
+        $formatMinutes = fn ($m) => $m === null ? null : (intdiv($m, 60) . 'h' . ($m % 60 ? ' ' . ($m % 60) . 'm' : ''));
+
+        // Attended = a check-in was recorded. Hours = sum of Check Out - Check In over the past events that have both.
+        $attended = $events->filter(fn ($e) => !empty($e->pivot->time_in));
+        $totalMinutes = (int) $events->sum(fn ($e) => $minutesWorked($e) ?? 0);
+        $declinedCount = $events->filter(fn ($e) => strtolower(trim((string) $e->pivot->confirmation_status)) === 'declined')->count();
         $equipment = $waiter->assignedEquipment;
 
         // Quick stats
-        $upcomingCount = $waiter->events->filter(fn ($e) => $e->event_date && $e->event_date->isFuture())->count();
-        $pendingConfirm = $waiter->events->filter(fn ($e) => strtolower((string) $e->pivot->confirmation_status) === 'pending')->count();
         $itemsOut = (int) $equipment
             ->filter(fn ($r) => !in_array(strtolower((string) $r->status), ['returned', 'lost']))
             ->sum(fn ($r) => max(0, (int) $r->quantity_allocated - (int) $r->quantity_returned - (int) $r->quantity_damaged - (int) $r->quantity_missing));
@@ -131,19 +164,19 @@
         {{-- ================= MAIN ================= --}}
         <div class="lg:col-span-8 xl:col-span-9 space-y-4">
 
-            {{-- Quick stats --}}
+            {{-- Quick stats (history only; upcoming / pending are on the Dashboard) --}}
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <div class="bg-white rounded-xl border border-slate-100 shadow-sm px-3 py-2">
-                    <div class="text-lg font-bold text-slate-800 leading-none">{{ $waiter->events->count() }}</div>
-                    <div class="text-[11px] text-slate-500 mt-1">Total Events</div>
+                    <div class="text-lg font-bold text-emerald-600 leading-none">{{ $attended->count() }}</div>
+                    <div class="text-[11px] text-slate-500 mt-1">Events Attended</div>
                 </div>
                 <div class="bg-white rounded-xl border border-slate-100 shadow-sm px-3 py-2">
-                    <div class="text-lg font-bold text-blue-600 leading-none">{{ $upcomingCount }}</div>
-                    <div class="text-[11px] text-slate-500 mt-1">Upcoming</div>
+                    <div class="text-lg font-bold text-blue-600 leading-none">{{ $totalMinutes > 0 ? $formatMinutes($totalMinutes) : '0h' }}</div>
+                    <div class="text-[11px] text-slate-500 mt-1">Hours Worked</div>
                 </div>
                 <div class="bg-white rounded-xl border border-slate-100 shadow-sm px-3 py-2">
-                    <div class="text-lg font-bold {{ $pendingConfirm ? 'text-amber-600' : 'text-slate-800' }} leading-none">{{ $pendingConfirm }}</div>
-                    <div class="text-[11px] text-slate-500 mt-1">Awaiting Confirmation</div>
+                    <div class="text-lg font-bold {{ $declinedCount ? 'text-red-600' : 'text-slate-800' }} leading-none">{{ $declinedCount }}</div>
+                    <div class="text-[11px] text-slate-500 mt-1">Declined</div>
                 </div>
                 <div class="bg-white rounded-xl border border-slate-100 shadow-sm px-3 py-2">
                     <div class="text-lg font-bold {{ $itemsOut ? 'text-orange-600' : 'text-slate-800' }} leading-none">{{ $itemsOut }}</div>
@@ -151,22 +184,30 @@
                 </div>
             </div>
 
-            {{-- Event Assignments --}}
+            {{-- Work History --}}
             <div class="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-                <div class="px-4 py-3 border-b border-slate-100">
-                    <h2 class="text-sm font-bold text-slate-800">Event Assignments</h2>
-                    <p class="text-xs text-slate-400">{{ $waiter->events->count() }} total {{ Str::plural('event', $waiter->events->count()) }}</p>
+                <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between gap-2">
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-800">Work History</h2>
+                        <p class="text-xs text-slate-400">{{ $events->count() }} past or declined {{ Str::plural('event', $events->count()) }} &middot; upcoming events are on your Dashboard</p>
+                    </div>
+                    <a href="{{ route('dashboard') }}"
+                        class="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-amber-700 hover:text-amber-800 transition-colors">
+                        Next Up
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+                    </a>
                 </div>
 
                 @if($events->isNotEmpty())
-                    <div class="overflow-x-auto">
-                        <table class="w-full min-w-[620px]">
-                            <thead>
-                                <tr class="bg-slate-50/50 border-b border-slate-100">
+                    <div class="overflow-auto max-h-[28rem]">
+                        <table class="w-full min-w-[680px]">
+                            <thead class="sticky top-0 z-10">
+                                <tr class="bg-slate-50 border-b border-slate-100">
                                     <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Event</th>
                                     <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Date</th>
                                     <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Role</th>
-                                    <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Time In / Out</th>
+                                    <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Check In / Out</th>
+                                    <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Hours</th>
                                     <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Status</th>
                                 </tr>
                             </thead>
@@ -176,16 +217,21 @@
                                         $conf = strtolower((string) $event->pivot->confirmation_status);
                                         $cConfig = $confConfig[$conf] ?? ['bg-slate-100 text-slate-600', ucfirst($conf ?: 'pending')];
                                         $role = $event->pivot->role;
-                                        $timeIn = $event->pivot->time_in ? \Carbon\Carbon::parse($event->pivot->time_in)->format('h:i A') : null;
-                                        $timeOut = $event->pivot->time_out ? \Carbon\Carbon::parse($event->pivot->time_out)->format('h:i A') : null;
-                                        $isUpcoming = $event->event_date && $event->event_date->isFuture();
+                                        $inAt = $event->pivot->time_in ? \Carbon\Carbon::parse($event->pivot->time_in) : null;
+                                        $outAt = $event->pivot->time_out ? \Carbon\Carbon::parse($event->pivot->time_out) : null;
+                                        $timeIn = $inAt?->format('h:i A');
+                                        $timeOut = $outAt?->format('h:i A');
+                                        // check-out on a different calendar day than check-in -> say so
+                                        $nextDay = $inAt && $outAt && !$inAt->isSameDay($outAt);
+                                        $hours = $formatMinutes($minutesWorked($event));
+                                        $wasCancelled = strtolower(trim((string) $event->status)) === 'cancelled';
                                     @endphp
-                                    <tr class="hover:bg-slate-50/50 transition">
+                                    <tr class="hover:bg-slate-50/50 transition {{ $conf === 'declined' || $wasCancelled ? 'opacity-70' : '' }}">
                                         <td class="px-4 py-2">
                                             <a href="{{ route('waiters.my-event', $event) }}"
                                                 class="text-xs font-semibold text-slate-800 hover:text-amber-600 transition">{{ $event->event_name }}</a>
-                                            @if($isUpcoming)
-                                                <span class="ml-1 align-middle text-[10px] font-semibold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">Upcoming</span>
+                                            @if($wasCancelled)
+                                                <span class="ml-1 align-middle text-[10px] font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">Cancelled</span>
                                             @endif
                                         </td>
                                         <td class="px-4 py-2 whitespace-nowrap">
@@ -202,10 +248,12 @@
                                                 <span class="font-medium text-slate-700">{{ $timeIn ?? '—' }}</span>
                                                 <span class="text-slate-400 mx-1">→</span>
                                                 <span class="font-medium text-slate-700">{{ $timeOut ?? '—' }}</span>
+                                                @if($nextDay)<span class="ml-1 text-[10px] font-semibold text-slate-400">{{ $outAt->format('M d') }}</span>@endif
                                             @else
                                                 <span class="text-slate-400 italic">Not recorded</span>
                                             @endif
                                         </td>
+                                        <td class="px-4 py-2 whitespace-nowrap text-xs font-semibold {{ $hours ? 'text-slate-700' : 'text-slate-300' }}">{{ $hours ?? '—' }}</td>
                                         <td class="px-4 py-2">
                                             <span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap {{ $cConfig[0] }}">{{ $cConfig[1] }}</span>
                                         </td>
@@ -216,8 +264,8 @@
                     </div>
                 @else
                     <div class="px-4 py-8 text-center text-slate-400">
-                        <i class="fas fa-calendar-times text-2xl mb-2 text-slate-200 block"></i>
-                        <p class="text-xs">You haven't been assigned to any events yet.</p>
+                        <i class="fas fa-history text-2xl mb-2 text-slate-200 block"></i>
+                        <p class="text-xs">No past or declined events yet. Your finished events will show up here.</p>
                     </div>
                 @endif
             </div>

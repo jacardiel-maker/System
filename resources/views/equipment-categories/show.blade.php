@@ -3,6 +3,7 @@
 
 @section('content')
     @php
+        $readOnly = auth()->user()->isOwner(); // owner: view only
         $imageUrl = $equipmentCategory->image ? asset('storage/' . $equipmentCategory->image) : null;
         $lowStockPercent = 20; // Low Stock = available below 20% of total (TC-INV-A06)
         $items = $equipmentCategory->items;
@@ -41,6 +42,7 @@
                 class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition">
                 <i class="fas fa-arrow-left text-xs"></i> Back
             </a>
+            @unless($readOnly)
             <a href="{{ route('equipment-categories.edit', $equipmentCategory) }}"
                 class="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 transition">
                 <i class="fas fa-pen text-xs"></i> Edit
@@ -53,6 +55,7 @@
                     <i class="fas fa-trash text-xs"></i> Delete
                 </button>
             </form>
+            @endunless
         </div>
     </div>
 
@@ -70,7 +73,7 @@
                     @endif
                     <div id="categoryImageFallback" class="{{ $imageUrl ? 'hidden' : '' }} w-full aspect-square rounded-lg bg-white shadow-sm flex flex-col items-center justify-center text-amber-500">
                         <i class="fas fa-tags text-4xl mb-2"></i>
-                        <a href="{{ route('equipment-categories.edit', $equipmentCategory) }}" class="text-xs font-semibold text-amber-700 hover:underline">Add an image</a>
+                        @unless($readOnly)<a href="{{ route('equipment-categories.edit', $equipmentCategory) }}" class="text-xs font-semibold text-amber-700 hover:underline">Add an image</a>@endunless
                     </div>
                     <p id="imageBrokenNote" class="hidden mt-2 text-[11px] text-red-600 text-center">
                         Image file not found. Run <code class="font-mono">php artisan storage:link</code>.
@@ -111,10 +114,12 @@
                         <h2 class="text-sm font-bold text-slate-800">Items in this Category</h2>
                         <p class="text-xs text-slate-400">{{ $items->count() }} equipment {{ Str::plural('item', $items->count()) }}</p>
                     </div>
+                    @unless($readOnly)
                     <a href="{{ route('equipment-items.create', ['category_id' => $equipmentCategory->id]) }}"
                         class="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 transition">
                         <i class="fas fa-plus text-[10px]"></i> Add Item
                     </a>
+                    @endunless
                 </div>
 
                 @if($items->count() > 0)
@@ -169,7 +174,7 @@
                     <div class="px-4 py-8 text-center text-slate-400">
                         <i class="fas fa-box-open text-2xl mb-2 text-slate-200 block"></i>
                         <p class="text-xs">No items in this category yet.</p>
-                        <a href="{{ route('equipment-items.create', ['category_id' => $equipmentCategory->id]) }}" class="text-amber-600 hover:underline text-xs inline-block mt-1">Add your first item</a>
+                        @unless($readOnly)<a href="{{ route('equipment-items.create', ['category_id' => $equipmentCategory->id]) }}" class="text-amber-600 hover:underline text-xs inline-block mt-1">Add your first item</a>@endunless
                     </div>
                 @endif
             </div>

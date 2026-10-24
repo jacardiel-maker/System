@@ -36,4 +36,16 @@ class User extends Authenticatable
     {
         return $this->role === 'waiter';
     }
+
+    /** Business owner: can only monitor (Dashboard + Reports), cannot change anything. */
+    public function isOwner(): bool
+    {
+        return $this->role === 'owner';
+    }
+
+    /** Can open the Dashboard overview and the Reports (admin and owner). */
+    public function canMonitor(): bool
+    {
+        return $this->isAdmin() || $this->isOwner();
+    }
 }

@@ -3,6 +3,7 @@
 
 @section('content')
     @php
+        $readOnly = auth()->user()->isOwner(); // owner: view only
         $imageUrl = $equipmentItem->image ? asset('storage/' . $equipmentItem->image) : null;
         $lowStockPercent = 20; // Low Stock = available below 20% of total (TC-INV-A06)
 
@@ -47,6 +48,7 @@
                 class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition">
                 <i class="fas fa-arrow-left text-xs"></i> Back
             </a>
+            @unless($readOnly)
             <a href="{{ route('equipment-items.edit', $equipmentItem) }}"
                 class="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 transition">
                 <i class="fas fa-pen text-xs"></i> Edit
@@ -59,6 +61,7 @@
                     <i class="fas fa-trash text-xs"></i> Delete
                 </button>
             </form>
+            @endunless
         </div>
     </div>
 
@@ -77,7 +80,7 @@
                     @endif
                     <div id="itemImageFallback" class="{{ $imageUrl ? 'hidden' : '' }} w-full aspect-square rounded-lg bg-white shadow-sm flex flex-col items-center justify-center text-amber-500">
                         <i class="fas fa-box-open text-4xl mb-2"></i>
-                        <a href="{{ route('equipment-items.edit', $equipmentItem) }}" class="text-xs font-semibold text-amber-700 hover:underline">Add an image</a>
+                        @unless($readOnly)<a href="{{ route('equipment-items.edit', $equipmentItem) }}" class="text-xs font-semibold text-amber-700 hover:underline">Add an image</a>@endunless
                     </div>
                     <p id="imageBrokenNote" class="hidden mt-2 text-[11px] text-red-600 text-center">
                         Image file not found. Run <code class="font-mono">php artisan storage:link</code>.
@@ -105,7 +108,7 @@
                             <i class="fas fa-barcode text-xs"></i>
                         </div>
                         <div class="min-w-0">
-                            <p class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Serial Code</p>
+                            <p class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Item Code</p>
                             <p class="text-sm font-semibold text-slate-700 font-mono">{{ $equipmentItem->serial_code ?: 'N/A' }}</p>
                         </div>
                     </div>

@@ -4,10 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\Barangay;
 use App\Models\City;
+use App\Models\Event;
 use App\Models\Province;
 use App\Models\Region;
 use App\Models\User;
 use App\Models\Waiter;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -208,6 +210,77 @@ class WaiterController extends Controller
         }
 
         return redirect()->route('waiters.index')->with('success', 'Waiter deleted.');
+    }
+
+    /**
+     * JSON feed for the calendar on the Waiters page:
+     * ONE entry per event, carrying the full list of waiters assigned to it, so two events
+     * on the same day always show up as two separate cards, each with its own waiters.
+     * Cancelled events and events with no (matching) waiters are left out.
+     * FullCalendar sends ?start=...&end=... for the visible range.
+     */
+    public function calendarFeed(Request $request)
+    {
+        $tz = config('app.timezone');
+        $start = Carbon::parse($request->query('start'))->setTimezone($tz);
+        $end = Carbon::parse($request->query('end'))->setTimezone($tz);
+
+        $search = trim((string) $request->query('search'));
+        $status = strtolower(trim((string) $request->query('status')));
+
+        $events = Event::query()
+            ->whereBetween('event_date', [$start, $end])
+            ->where(function ($q) {
+                $q->whereNull('status')->orWhere('status', '!=', 'cancelled');
+            })
+            ->with(['waiters' => function ($q) use ($search, $status) {
+                $q->with('user');
+
+                if ($status !== '') {
+                    $q->where('waiters.status', $status);
+                }
+
+                if ($search !== '') {
+                    $q->where(function ($w) use ($search) {
+                        $w->where('waiters.phone', 'like', "%{$search}%")
+                            ->orWhereHas('user', function ($u) use ($search) {
+                                $u->where('name', 'like', "%{$search}%")
+                                    ->orWhere('email', 'like', "%{$search}%");
+                            });
+                    });
+                }
+            }])
+            ->orderBy('event_date')
+            ->get();
+
+        $entries = [];
+        foreach ($events as $event) {
+            if ($event->waiters->isEmpty()) {
+                continue;
+            }
+
+            $waiters = $event->waiters->map(function ($waiter) {
+                return [
+                    'name' => $waiter->user->name ?? 'Unknown',
+                    'role' => $waiter->pivot->role,
+                    'confirmation' => strtolower(trim((string) $waiter->pivot->confirmation_status)) ?: 'pending',
+                ];
+            })->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)->values()->all();
+
+            $entries[] = [
+                'id' => 'event-' . $event->id,
+                'title' => $event->event_name,
+                'start' => $event->event_date->toIso8601String(),
+                'url' => route('events.show', $event),
+                'extendedProps' => [
+                    'customer' => $event->customer_name,
+                    'venue' => $event->venue_address,
+                    'waiters' => $waiters,
+                ],
+            ];
+        }
+
+        return response()->json($entries);
     }
 
     public function myProfile()

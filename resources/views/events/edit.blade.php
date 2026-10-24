@@ -63,6 +63,19 @@
                     @enderror
                 </div>
 
+                {{-- Customer --}}
+                <div class="space-y-1.5">
+                    <label class="block text-sm font-semibold text-slate-700">
+                        Customer <span class="text-rose-500">*</span>
+                    </label>
+                    <input type="text" name="customer_name" value="{{ old('customer_name', $event->customer_name) }}" required maxlength="255"
+                        class="w-full rounded-xl border-slate-200 bg-slate-50/50 px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/20 transition-all @error('customer_name') border-rose-500 focus:border-rose-500 focus:ring-rose-500/20 @enderror"
+                        placeholder="Who ordered the catering? e.g., Reyes family (birthday), ABC Corp. HR">
+                    @error('customer_name')
+                        <p class="text-xs text-rose-600 font-medium">{{ $message }}</p>
+                    @enderror
+                </div>
+
                 <div class="space-y-1.5">
                     <label class="block text-sm font-semibold text-slate-700">Venue Address <span class="text-rose-500">*</span></label>
                     <textarea name="venue_address" rows="3" required
@@ -75,7 +88,7 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <div class="space-y-1.5">
                         <label class="block text-sm font-semibold text-slate-700">Event Date & Time <span class="text-rose-500">*</span></label>
-                        <input type="datetime-local" name="event_date" value="{{ old('event_date', $event->event_date?->format('Y-m-d\TH:i')) }}" required
+                        <input id="event_date" type="datetime-local" name="event_date" value="{{ old('event_date', $event->event_date?->format('Y-m-d\TH:i')) }}" required
                             class="w-full rounded-xl border-slate-200 bg-slate-50/50 px-4 py-2.5 text-sm text-slate-900 focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/20 transition-all @error('event_date') border-rose-500 focus:border-rose-500 focus:ring-rose-500/20 @enderror">
                         @error('event_date')<p class="text-xs text-rose-600 font-medium">{{ $message }}</p>@enderror
                     </div>
@@ -87,6 +100,9 @@
                         @error('setup_time')<p class="text-xs text-rose-600 font-medium">{{ $message }}</p>@enderror
                     </div>
                 </div>
+
+                {{-- Other events on the chosen day (filled in by the availability script) --}}
+                <div id="dayEventsPanel" class="hidden"></div>
             </div>
         </div>
 
@@ -192,6 +208,8 @@
                         </label>
                     </div>
 
+                    <div id="busyWarning" class="hidden mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800"></div>
+
                     <div id="waiterList" class="space-y-2 max-h-72 overflow-y-auto pr-1 custom-scrollbar">
                         @foreach($waiters as $waiter)
                             @php
@@ -207,7 +225,7 @@
                                     $role = $existing->pivot->role ?? 'waiter';
                                 }
                             @endphp
-                            <label data-waiter-name="{{ strtolower($wName) }}"
+                            <label data-waiter-id="{{ $waiter->id }}" data-assigned="{{ $existing ? '1' : '0' }}" data-waiter-label="{{ $wName }}" data-waiter-name="{{ strtolower($wName) }}"
                                 class="waiter-row flex items-center gap-4 p-3 rounded-xl border border-slate-200 hover:border-amber-300 hover:bg-amber-50/30 transition-all cursor-pointer group has-[:checked]:border-amber-500 has-[:checked]:bg-amber-50/50 has-[:checked]:ring-1 has-[:checked]:ring-amber-500/20">
                                 <input type="checkbox" name="waiters[{{ $loop->index }}][id]" value="{{ $waiter->id }}"
                                     {{ $isChecked ? 'checked' : '' }}
@@ -221,6 +239,7 @@
                                         @endif
                                     </p>
                                     <p class="text-xs text-slate-500">{{ $waiter->phone ?: '—' }}</p>
+                                    <p class="waiter-avail mt-0.5 text-[11px] text-slate-400"></p>
                                 </div>
 
                                 <div class="flex-shrink-0">
@@ -328,6 +347,175 @@
 
         updateCount();
         applyFilter();
+    })();
+</script>
+{{-- Waiter availability for the chosen event date --}}
+<script>
+    (function () {
+        const dateInput = document.getElementById('event_date');
+        if (!dateInput) return;
+
+        const panel = document.getElementById('dayEventsPanel');
+        const warning = document.getElementById('busyWarning');
+        const rows = Array.from(document.querySelectorAll('.waiter-row'));
+        const url = @json(route('events.availability'));
+        const excludeId = @json($event->id);
+        const roleLabels = { waiter: 'Waiter', head_waiter: 'Head Waiter', setup_crew: 'Setup Crew' };
+
+        let busy = {};
+        let loadedDay = null;
+        let seq = 0;
+
+        function make(tag, className, text) {
+            const node = document.createElement(tag);
+            if (className) node.className = className;
+            if (text !== undefined) node.textContent = text;
+            return node;
+        }
+
+        function prettyDay(day) {
+            return new Date(day + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        }
+
+        function setRowMessage(row, text, colorClass) {
+            const el = row.querySelector('.waiter-avail');
+            if (!el) return;
+            el.textContent = text;
+            el.className = 'waiter-avail mt-0.5 text-[11px] ' + colorClass;
+        }
+
+        function setRowLocked(row, locked) {
+            const check = row.querySelector('.waiter-check');
+            const select = row.querySelector('select');
+            if (!check) return;
+            const wasChecked = check.checked;
+            if (locked) check.checked = false;
+            check.disabled = locked;       // disabled inputs are not submitted
+            if (select) select.disabled = locked;
+            row.style.opacity = locked ? '0.6' : '';
+            row.style.cursor = locked ? 'not-allowed' : '';
+            if (locked && wasChecked) check.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        function renderWarning() {
+            if (!warning) return;
+            const clashing = rows.filter(r => {
+                const check = r.querySelector('.waiter-check');
+                return check && check.checked && (busy[r.dataset.waiterId] || []).length;
+            });
+            if (!clashing.length) {
+                warning.classList.add('hidden');
+                warning.textContent = '';
+                return;
+            }
+            const names = clashing.map(r => r.dataset.waiterLabel || 'A waiter');
+            warning.textContent = 'Heads up: ' + names.join(', ') + (names.length > 1 ? ' are' : ' is')
+                + ' also assigned to another event that day. Please double-check.';
+            warning.classList.remove('hidden');
+        }
+
+        function renderRows(state) {
+            rows.forEach(row => {
+                if (state !== 'ready') setRowLocked(row, false);
+                if (state === 'none') return setRowMessage(row, 'Pick the event date to check availability', 'text-slate-400');
+                if (state === 'loading') return setRowMessage(row, 'Checking availability...', 'text-slate-400');
+                if (state === 'error') return setRowMessage(row, 'Could not check availability', 'text-slate-400');
+
+                const jobs = busy[row.dataset.waiterId] || [];
+                if (jobs.length) {
+                    const text = jobs.map(j =>
+                        j.event_name + ' (' + j.time + ', ' + (roleLabels[j.role] || j.role) + ', ' + j.confirmation + ')'
+                    ).join('; ');
+                    // Waiters already on another event that day cannot be picked again.
+                    // (On the edit page, someone already assigned to THIS event stays selectable so they are not dropped.)
+                    const locked = row.dataset.assigned !== '1';
+                    setRowLocked(row, locked);
+                    setRowMessage(row,
+                        (locked ? 'Not available. Already assigned to: ' : 'Also assigned that day: ') + text,
+                        locked ? 'text-rose-600 font-medium' : 'text-amber-700 font-medium');
+                } else {
+                    setRowLocked(row, false);
+                    setRowMessage(row, 'Available', 'text-emerald-600 font-medium');
+                }
+            });
+            renderWarning();
+        }
+
+        function renderPanel(day, events) {
+            panel.replaceChildren();
+            if (!events.length) {
+                panel.className = 'rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800';
+                panel.textContent = 'No other events on ' + prettyDay(day) + '. All active waiters are free that day.';
+                return;
+            }
+            panel.className = 'rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900';
+            panel.appendChild(make('p', 'font-semibold mb-1.5',
+                events.length + ' other ' + (events.length > 1 ? 'events' : 'event') + ' on ' + prettyDay(day) + ':'));
+
+            const list = make('ul', 'space-y-1');
+            events.forEach(ev => {
+                const li = make('li', 'text-xs');
+                const link = make('a', 'font-semibold underline hover:text-amber-700', ev.name);
+                link.href = ev.url;
+                link.target = '_blank';
+                link.rel = 'noopener';
+                li.appendChild(link);
+                li.appendChild(document.createTextNode(
+                    ' · ' + ev.time
+                    + (ev.customer ? ' · Customer: ' + ev.customer : '')
+                    + ' · ' + ev.waiter_count + (ev.waiter_count === 1 ? ' waiter' : ' waiters')
+                ));
+                list.appendChild(li);
+            });
+            panel.appendChild(list);
+        }
+
+        async function load() {
+            const value = dateInput.value;
+            if (!value) {
+                loadedDay = null;
+                busy = {};
+                panel.classList.add('hidden');
+                renderRows('none');
+                return;
+            }
+
+            const day = value.slice(0, 10);
+            if (day === loadedDay) return;
+
+            const mySeq = ++seq;
+            renderRows('loading');
+
+            try {
+                const params = new URLSearchParams({ date: day });
+                if (excludeId) params.set('exclude', excludeId);
+
+                const res = await fetch(url + '?' + params.toString(), {
+                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    credentials: 'same-origin'
+                });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                if (mySeq !== seq) return; // a newer date was picked meanwhile
+
+                busy = data.busy || {};
+                loadedDay = day;
+                renderPanel(day, data.events || []);
+                panel.classList.remove('hidden');
+                renderRows('ready');
+            } catch (e) {
+                if (mySeq !== seq) return;
+                busy = {};
+                loadedDay = null;
+                panel.classList.add('hidden');
+                renderRows('error');
+            }
+        }
+
+        dateInput.addEventListener('change', load);
+        document.querySelectorAll('.waiter-check').forEach(c => c.addEventListener('change', renderWarning));
+
+        load();
     })();
 </script>
 @endsection
