@@ -217,7 +217,10 @@ class EquipmentTrackingTest extends TestCase
         $item = $this->item($category, 50);
         $allocation = $this->allocation($admin, $event, $item, $waiter, 10);
 
-        $response = $this->actingAs($admin)->post(route('event-equipment.return', $allocation), [
+        // Record Return keeps the admin on the page they submitted from
+        $response = $this->actingAs($admin)
+            ->from(route('event-equipment.show', $allocation))
+            ->post(route('event-equipment.return', $allocation), [
             'quantity_returned' => 10,
             'quantity_damaged' => 0,
             'quantity_missing' => 0,
@@ -253,7 +256,10 @@ class EquipmentTrackingTest extends TestCase
         $item = $this->item($category, 50);
         $allocation = $this->allocation($admin, $event, $item, $waiter, 10);
 
-        $response = $this->actingAs($admin)->post(route('event-equipment.return', $allocation), [
+        // Record Return keeps the admin on the page they submitted from
+        $response = $this->actingAs($admin)
+            ->from(route('event-equipment.show', $allocation))
+            ->post(route('event-equipment.return', $allocation), [
             'quantity_returned' => 6,
             'quantity_damaged' => 2,
             'quantity_missing' => 2,

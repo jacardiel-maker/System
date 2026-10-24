@@ -43,6 +43,7 @@ class SchedulingTest extends TestCase
     {
         return Event::create(array_merge([
             'event_name' => 'Test Birthday Event',
+            'customer_name' => 'Test Customer',
             'venue_address' => 'San Miguel, Nabua, Camarines Sur',
             'event_date' => now()->addDays(14),
             'setup_time' => now()->addDays(14)->setTime(11, 0),
@@ -67,6 +68,7 @@ class SchedulingTest extends TestCase
 
         $response = $this->actingAs($admin)->post(route('events.store'), [
             'event_name' => '60th Birthday Celebration',
+            'customer_name' => 'Juan Dela Cruz',
             'venue_address' => 'San Isidro, Nabua, Camarines Sur',
             'event_date' => $eventDate->format('Y-m-d H:i:s'),
             'setup_time' => $setupTime->format('Y-m-d H:i:s'),
@@ -107,6 +109,7 @@ class SchedulingTest extends TestCase
 
         $response = $this->actingAs($admin)->put(route('events.update', $event), [
             'event_name' => 'Updated Birthday Event',
+            'customer_name' => 'Maria Santos',
             'venue_address' => 'San Jose, Iriga City',
             'event_date' => now()->addDays(20)->setTime(17, 0)->format('Y-m-d H:i:s'),
             'setup_time' => now()->addDays(20)->setTime(13, 0)->format('Y-m-d H:i:s'),
@@ -120,6 +123,7 @@ class SchedulingTest extends TestCase
         $this->assertDatabaseHas('events', [
             'id' => $event->id,
             'event_name' => 'Updated Birthday Event',
+            'customer_name' => 'Maria Santos',
             'guest_count' => 100,
             'venue_address' => 'San Jose, Iriga City',
         ]);
@@ -227,13 +231,15 @@ class SchedulingTest extends TestCase
 
         $response = $this->actingAs($waiter->user)->post(route('events.confirm', $event), [
             'status' => 'declined',
+            'decline_reason' => 'I have a family emergency.',
         ]);
 
-        $response->assertSessionHas('success', 'Participation declined. Admin has been notified.');
+        $response->assertSessionHas('success', 'Participation declined. The owner has been notified.');
         $this->assertDatabaseHas('event_waiter', [
             'event_id' => $event->id,
             'waiter_id' => $waiter->id,
             'confirmation_status' => 'declined',
+            'decline_reason' => 'I have a family emergency.',
         ]);
         Notification::assertSentTo($admin, EventDeclinedNotification::class);
     }

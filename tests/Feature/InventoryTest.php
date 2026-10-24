@@ -171,12 +171,18 @@ class InventoryTest extends TestCase
     }
 
     /** TC-INV-A07: Low-Stock Warning */
-    public function test_inventory_low_stock_filter_identifies_items_at_or_below_twenty_percent(): void
+    public function test_inventory_low_stock_filter_identifies_items_below_twenty_percent(): void
     {
         $admin = $this->admin();
         $category = $this->category();
         $lowStock = $this->item($category, [
             'name' => 'Low Stock Plates',
+            'total_quantity' => 100,
+            'available_quantity' => 15,
+        ]);
+        // Exactly 20% is not low stock (the rule is strictly below 20%)
+        $borderStock = $this->item($category, [
+            'name' => 'Border Stock Plates',
             'total_quantity' => 100,
             'available_quantity' => 20,
         ]);
@@ -190,6 +196,7 @@ class InventoryTest extends TestCase
 
         $response->assertOk();
         $response->assertSee($lowStock->name);
+        $response->assertDontSee($borderStock->name);
         $response->assertDontSee($normalStock->name);
     }
 

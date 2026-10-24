@@ -3,97 +3,113 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Models\Waiter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class ProfileTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_profile_page_is_displayed(): void
+    private function waiter(): Waiter
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create(['role' => 'waiter']);
 
-        $response = $this
-            ->actingAs($user)
-            ->get('/profile');
+        return Waiter::create([
+            'user_id' => $user->id,
+            'phone' => '09123456789',
+            'status' => 'active',
+        ]);
+    }
+
+    public function test_waiter_profile_page_is_displayed(): void
+    {
+        $waiter = $this->waiter();
+
+        $response = $this->actingAs($waiter->user)->get(route('waiters.my-profile'));
 
         $response->assertOk();
+        $response->assertViewIs('waiters.my-profile');
+        $response->assertViewHas('waiter');
     }
 
-    public function test_profile_information_can_be_updated(): void
+    public function test_non_waiter_cannot_open_waiter_profile(): void
     {
-        $user = User::factory()->create();
+        $admin = User::factory()->create(['role' => 'admin']);
 
-        $response = $this
-            ->actingAs($user)
-            ->patch('/profile', [
-                'name' => 'Test User',
-                'email' => 'test@example.com',
-            ]);
+        $response = $this->actingAs($admin)->get(route('waiters.my-profile'));
 
-        $response
-            ->assertSessionHasNoErrors()
-            ->assertRedirect('/profile');
-
-        $user->refresh();
-
-        $this->assertSame('Test User', $user->name);
-        $this->assertSame('test@example.com', $user->email);
-        $this->assertNull($user->email_verified_at);
+        $response->assertForbidden();
     }
 
-    public function test_email_verification_status_is_unchanged_when_the_email_address_is_unchanged(): void
+    public function test_waiter_can_change_password(): void
     {
-        $user = User::factory()->create();
+        $waiter = $this->waiter();
 
-        $response = $this
-            ->actingAs($user)
-            ->patch('/profile', [
-                'name' => 'Test User',
-                'email' => $user->email,
+        $response = $this->actingAs($waiter->user)
+            ->from(route('waiters.my-profile'))
+            ->post(route('waiters.change-password'), [
+                'current_password' => 'password',
+                'new_password' => 'new-password',
+                'new_password_confirmation' => 'new-password',
             ]);
 
-        $response
-            ->assertSessionHasNoErrors()
-            ->assertRedirect('/profile');
-
-        $this->assertNotNull($user->refresh()->email_verified_at);
+        $response->assertRedirect(route('waiters.my-profile'));
+        $response->assertSessionHas('password_success');
+        $this->assertTrue(Hash::check('new-password', $waiter->user->fresh()->password));
     }
 
-    public function test_user_can_delete_their_account(): void
+    public function test_waiter_password_is_not_changed_with_wrong_current_password(): void
     {
-        $user = User::factory()->create();
+        $waiter = $this->waiter();
 
-        $response = $this
-            ->actingAs($user)
-            ->delete('/profile', [
-                'password' => 'password',
+        $response = $this->actingAs($waiter->user)
+            ->from(route('waiters.my-profile'))
+            ->post(route('waiters.change-password'), [
+                'current_password' => 'wrong-password',
+                'new_password' => 'new-password',
+                'new_password_confirmation' => 'new-password',
             ]);
 
-        $response
-            ->assertSessionHasNoErrors()
-            ->assertRedirect('/');
-
-        $this->assertGuest();
-        $this->assertNull($user->fresh());
+        $response->assertRedirect(route('waiters.my-profile'));
+        $response->assertSessionHas('password_error');
+        $this->assertTrue(Hash::check('password', $waiter->user->fresh()->password));
     }
 
-    public function test_correct_password_must_be_provided_to_delete_account(): void
+    public function test_owner_account_page_is_displayed(): void
     {
-        $user = User::factory()->create();
+        $owner = User::factory()->create(['role' => 'owner']);
 
-        $response = $this
-            ->actingAs($user)
-            ->from('/profile')
-            ->delete('/profile', [
-                'password' => 'wrong-password',
+        $response = $this->actingAs($owner)->get(route('owner.account'));
+
+        $response->assertOk();
+        $response->assertViewIs('owner.account');
+    }
+
+    public function test_owner_can_change_password(): void
+    {
+        $owner = User::factory()->create(['role' => 'owner']);
+
+        $response = $this->actingAs($owner)
+            ->from(route('owner.account'))
+            ->post(route('owner.change-password'), [
+                'current_password' => 'password',
+                'new_password' => 'new-password',
+                'new_password_confirmation' => 'new-password',
             ]);
 
-        $response
-            ->assertSessionHasErrorsIn('userDeletion', 'password')
-            ->assertRedirect('/profile');
+        $response->assertRedirect(route('owner.account'));
+        $response->assertSessionHas('password_success');
+        $this->assertTrue(Hash::check('new-password', $owner->fresh()->password));
+    }
 
-        $this->assertNotNull($user->fresh());
+    public function test_non_owner_cannot_open_owner_account(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $response = $this->actingAs($admin)->get(route('owner.account'));
+
+        $response->assertForbidden();
     }
 }
