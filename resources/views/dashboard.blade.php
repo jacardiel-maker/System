@@ -251,12 +251,20 @@
                 \App\Models\Event::where('status', 'cancelled')->count(),
             ];
 
-            $conditionCounts = [
-                \App\Models\EquipmentItem::where('condition', 'new')->count(),
-                \App\Models\EquipmentItem::where('condition', 'good')->count(),
-                \App\Models\EquipmentItem::where('condition', 'fair')->count(),
-                \App\Models\EquipmentItem::where('condition', 'damaged')->count(),
-            ];
+            // Units reported damaged when equipment came back from an event (event_equipment.quantity_damaged), per item.
+            // An item's own "condition" field may not change when that happens, so on its own it would hide them.
+            $damagedUnitsByItem = \App\Models\EventEquipment::select('equipment_item_id', \Illuminate\Support\Facades\DB::raw('SUM(quantity_damaged) as units'))
+                ->groupBy('equipment_item_id')
+                ->havingRaw('SUM(quantity_damaged) > 0')
+                ->pluck('units', 'equipment_item_id');
+
+            // An item counts as Damaged if it is marked damaged OR damaged units were reported on a return
+            $conditionOf = function ($i) use ($damagedUnitsByItem) {
+                $c = strtolower(trim((string) $i->condition));
+                return ($c === 'damaged' || (int) ($damagedUnitsByItem[$i->id] ?? 0) > 0) ? 'damaged' : $c;
+            };
+            $conditionTally = \App\Models\EquipmentItem::select('id', 'condition')->get()->countBy($conditionOf);
+            $conditionCounts = array_map(fn ($k) => (int) ($conditionTally[$k] ?? 0), ['new', 'good', 'fair', 'damaged']);
 
             $topEquipment = \App\Models\EventEquipment::select('equipment_items.name', \Illuminate\Support\Facades\DB::raw('SUM(event_equipment.quantity_allocated) as total'))
                 ->join('equipment_items', 'event_equipment.equipment_item_id', '=', 'equipment_items.id')
@@ -293,6 +301,8 @@
                     'available' => (int) $i->available_quantity,
                     'inUse' => max((int) $i->total_quantity - (int) $i->available_quantity, 0),
                     'condition' => strtolower(trim((string) $i->condition)),
+                    'effective' => $conditionOf($i), // 'damaged' also when damaged units were reported on a return
+                    'damagedUnits' => (int) ($damagedUnitsByItem[$i->id] ?? 0),
                 ])->values();
 
             $drillTop = \App\Models\EventEquipment::with(['event', 'equipmentItem', 'assignedWaiter.user'])
@@ -548,7 +558,8 @@
 
                 {{-- Equipment Condition --}}
                 <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100 h-[320px] flex flex-col">
-                    <h2 class="shrink-0 text-sm font-bold text-slate-800 mb-4">Equipment Condition</h2>
+                    <h2 class="shrink-0 text-sm font-bold text-slate-800 mb-1">Equipment Condition</h2>
+                    <p class="shrink-0 text-[11px] text-slate-400 mb-3">Items by condition. Damaged also counts items with damaged units reported on returns.</p>
                     <div class="relative flex-1 min-h-0"><canvas id="conditionChart"></canvas></div>
                 </div>
 
@@ -639,8 +650,10 @@
                 { label: 'Category', key: 'category' },
                 { label: 'Available', render: r => '<span class="font-semibold ' + (r.available <= 0 ? 'text-red-600' : 'text-slate-700') + '">' + r.available + '</span> / ' + r.total, align: 'center' },
                 { label: 'In use', key: 'inUse', align: 'center' },
-                { label: 'Condition', render: r => d.badge(d.cap(r.condition || 'unknown'), conditionCls[r.condition]) }
+                { label: 'Condition', render: r => d.badge(d.cap(r.effective || r.condition || 'unknown'), conditionCls[r.effective || r.condition]) }
             ];
+            const damagedUnitsColumn = { label: 'Damaged units', align: 'center',
+                render: r => r.damagedUnits ? '<span class="font-semibold text-red-600">' + r.damagedUnits + '</span>' : '<span class="text-slate-300">—</span>' };
 
             const statusOrder = ['scheduled', 'ongoing', 'completed', 'cancelled'];
             function eventSummary(rows) {
@@ -724,12 +737,13 @@
                     { label: 'Status', render: r => d.badge(d.cap(r.status || 'unknown'), allocCls[r.status]) }
                 ];
                 return '<div class="flex flex-wrap items-center gap-2 mb-3">' + d.badge(d.cap(it.condition || 'unknown'), conditionCls[it.condition])
+                    + (it.damagedUnits > 0 ? d.badge(it.damagedUnits + ' damaged ' + (it.damagedUnits === 1 ? 'unit' : 'units') + ' reported', 'bg-red-50 text-red-600') : '')
                     + d.badge(it.category, 'bg-slate-100 text-slate-600')
                     + (it.available <= 0 ? d.badge('Out of stock', 'bg-red-100 text-red-700') : (it.low ? d.badge('Low stock', 'bg-red-50 text-red-600') : '')) + '</div>'
                     + (it.code ? '<div class="text-xs text-slate-500 mb-3">Item code: <span class="font-mono text-slate-700">' + d.esc(it.code) + '</span></div>' : '')
                     + '<div class="grid grid-cols-3 gap-2">' + d.stat('Total stock', it.total) + d.stat('Available', it.available, pct + '% of stock', (it.available <= 0 || it.low) ? 'text-red-600' : 'text-emerald-600') + d.stat('In use', it.inUse) + '</div>'
                     + '<div class="mt-3 h-2 rounded-full bg-slate-100 overflow-hidden"><div class="h-full rounded-full ' + bar + '" style="width:' + pct + '%"></div></div>'
-                    + d.section('Recent allocations' + (h.length >= 20 ? ' (latest 20)' : ' (' + h.length + ')'), d.tableHtml(cols, h, 'This item has not been allocated to any event yet.'))
+                    + d.section(h.length > 20 ? 'Allocations (latest 20, plus any with damaged or missing units — ' + h.length + ' shown)' : 'Recent allocations (' + h.length + ')', d.tableHtml(cols, h, 'This item has not been allocated to any event yet.'))
                     + (READ_ONLY ? '' : '<div class="mt-5 text-right"><a href="' + ITEM_URL + '/' + it.id + '" class="text-xs font-semibold text-amber-700 hover:underline">Open the full item page <i class="fas fa-arrow-right text-[10px]"></i></a></div>');
             }
             function openItem(id, fromList) {
@@ -753,7 +767,8 @@
             function showItems(title, rows) {
                 const units = rows.reduce((t, i) => t + i.total, 0), avail = rows.reduce((t, i) => t + i.available, 0);
                 d.open({
-                    title: title, columns: itemColumns, rows: rows, empty: 'No equipment items here.', onRow: r => openItem(r.id, true),
+                    title: title, columns: rows.some(r => r.damagedUnits > 0) ? itemColumns.concat([damagedUnitsColumn]) : itemColumns,
+                    rows: rows, empty: 'No equipment items here.', onRow: r => openItem(r.id, true),
                     subtitle: plural(rows.length, 'item') + (rows.length ? ' · ' + units + ' units · ' + avail + ' available · click a row for full details' : '')
                 });
             }
@@ -865,7 +880,7 @@
                     }
                 }, d.onChart(function (i) {
                     const key = ['new', 'good', 'fair', 'damaged'][i];
-                    showItems(d.cap(key) + ' condition', DRILL.items.filter(it => it.condition === key));
+                    showItems(d.cap(key) + ' condition', DRILL.items.filter(it => it.effective === key));
                 })),
                 plugins: [valueLabels]
             });

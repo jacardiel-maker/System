@@ -46,6 +46,24 @@ class ReportController extends Controller
             $query->whereHas('event', fn($q) => $q->whereDate('event_date', '<=', $request->to));
         }
 
+        // Show only records with a problem (so damaged / missing units are easy to find among thousands of rows)
+        if ($request->filled('issue')) {
+            switch ($request->issue) {
+                case 'damaged':
+                    $query->where('quantity_damaged', '>', 0);
+                    break;
+                case 'missing':
+                    $query->where('quantity_missing', '>', 0);
+                    break;
+                case 'problem': // damaged or missing
+                    $query->where(fn($q) => $q->where('quantity_damaged', '>', 0)->orWhere('quantity_missing', '>', 0));
+                    break;
+                case 'pending': // same rule as the "Not Yet Returned" card
+                    $query->whereRaw('quantity_allocated > quantity_returned + quantity_damaged + quantity_missing');
+                    break;
+            }
+        }
+
         $records = $query->latest()->get();
 
         return view('reports.equipment', compact('records'));
@@ -53,6 +71,8 @@ class ReportController extends Controller
 
     public function accountability(Request $request)
     {
+        // The accountability view reads the equipment records itself (so records that came back
+        // damaged / missing are never left out); this is kept only for compatibility.
         $waiters = Waiter::with(['user', 'assignedEquipment' => function($q) {
             $q->whereIn('status', ['partially_returned', 'lost']);
         }])->get();

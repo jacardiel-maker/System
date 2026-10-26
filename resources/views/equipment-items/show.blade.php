@@ -22,6 +22,11 @@
             'damaged' => ['bg-red-100 text-red-700', 'Damaged'],
         ];
         $condition = strtolower(trim((string) $equipmentItem->condition));
+        // Damaged units reported when this item came back from events (allocations are already loaded)
+        $damagedUnitsTotal = (int) $equipmentItem->eventAllocations->sum('quantity_damaged');
+        if ($damagedUnitsTotal > 0) {
+            $condition = 'damaged';
+        }
         $cConfig = $conditionConfig[$condition] ?? ['bg-slate-100 text-slate-600', ucfirst($condition ?: 'unknown')];
 
         $allocConfig = [
@@ -88,6 +93,9 @@
 
                     <div class="mt-3 text-center">
                         <span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium {{ $cConfig[0] }}">{{ $cConfig[1] }}</span>
+                        @if($damagedUnitsTotal > 0)
+                            <span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-600">{{ number_format($damagedUnitsTotal) }} damaged {{ \Illuminate\Support\Str::plural('unit', $damagedUnitsTotal) }} reported</span>
+                        @endif
                     </div>
                 </div>
 
@@ -150,17 +158,34 @@
             <div class="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
                 <div class="px-4 py-3 border-b border-slate-100">
                     <h2 class="text-sm font-bold text-slate-800">Allocation History</h2>
-                    <p class="text-xs text-slate-400">{{ $equipmentItem->eventAllocations->count() }} total {{ Str::plural('allocation', $equipmentItem->eventAllocations->count()) }}</p>
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <p class="text-xs text-slate-400">
+                            {{ $equipmentItem->eventAllocations->count() }} total {{ Str::plural('allocation', $equipmentItem->eventAllocations->count()) }}
+                            @php $issueAllocCount = $equipmentItem->eventAllocations->filter(fn ($a) => (int) $a->quantity_damaged > 0 || (int) $a->quantity_missing > 0)->count(); @endphp
+                            @if($issueAllocCount > 0)
+                                · <span class="text-red-600 font-semibold">{{ $issueAllocCount }} with damaged / missing units</span>
+                            @endif
+                        </p>
+                        @if($issueAllocCount > 0)
+                            <label class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 cursor-pointer select-none">
+                                <input type="checkbox" id="onlyIssues" class="rounded border-slate-300 text-amber-600 focus:ring-amber-500">
+                                Show only damaged / missing
+                            </label>
+                        @endif
+                    </div>
                 </div>
 
                 @if($equipmentItem->eventAllocations->count() > 0)
                     <div class="overflow-x-auto">
-                        <table class="w-full min-w-[520px]">
+                        <table class="w-full min-w-[640px]">
                             <thead>
                                 <tr class="bg-slate-50/50 border-b border-slate-100">
                                     <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Event</th>
                                     <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Waiter</th>
                                     <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Qty</th>
+                                    <th class="px-3 py-2 text-center text-[11px] font-bold text-slate-400 uppercase tracking-wider">Returned</th>
+                                    <th class="px-3 py-2 text-center text-[11px] font-bold text-slate-400 uppercase tracking-wider">Damaged</th>
+                                    <th class="px-3 py-2 text-center text-[11px] font-bold text-slate-400 uppercase tracking-wider">Missing</th>
                                     <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Status</th>
                                 </tr>
                             </thead>
@@ -170,8 +195,11 @@
                                         $aStatus = strtolower(trim((string) $alloc->status));
                                         $aConfig = $allocConfig[$aStatus] ?? ['bg-slate-100 text-slate-600', ucfirst(str_replace('_', ' ', $aStatus))];
                                         $waiterName = $alloc->assignedWaiter->user->name ?? null;
+                                        $aDamaged = (int) $alloc->quantity_damaged;
+                                        $aMissing = (int) $alloc->quantity_missing;
+                                        $aHasIssue = $aDamaged > 0 || $aMissing > 0;
                                     @endphp
-                                    <tr class="hover:bg-slate-50/50 transition">
+                                    <tr data-issue="{{ $aHasIssue ? '1' : '0' }}" class="{{ $aHasIssue ? 'bg-red-50/40' : '' }} hover:bg-slate-50/50 transition">
                                         <td class="px-4 py-2">
                                             @if($alloc->event)
                                                 <a href="{{ route('events.show', $alloc->event) }}" class="block text-xs font-semibold text-slate-800 hover:text-amber-600 transition leading-tight">{{ $alloc->event->event_name }}</a>
@@ -184,6 +212,9 @@
                                         <td class="px-4 py-2">
                                             <span class="inline-flex items-center justify-center min-w-[28px] h-6 px-1.5 rounded-md bg-slate-100 text-slate-700 text-xs font-bold">{{ (int) $alloc->quantity_allocated }}</span>
                                         </td>
+                                        <td class="px-3 py-2 text-xs text-center font-semibold text-emerald-600">{{ (int) $alloc->quantity_returned }}</td>
+                                        <td class="px-3 py-2 text-xs text-center font-semibold {{ $aDamaged ? 'text-orange-600' : 'text-slate-300' }}">{{ $aDamaged }}</td>
+                                        <td class="px-3 py-2 text-xs text-center font-semibold {{ $aMissing ? 'text-red-600' : 'text-slate-300' }}">{{ $aMissing }}</td>
                                         <td class="px-4 py-2">
                                             <span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap {{ $aConfig[0] }}">{{ $aConfig[1] }}</span>
                                         </td>
@@ -269,6 +300,19 @@
                     window.closeDeleteDialog();
                     window.closeImageViewer();
                 }
+            });
+        })();
+    </script>
+
+    {{-- "Show only damaged / missing" in the allocation history --}}
+    <script>
+        (function () {
+            const box = document.getElementById('onlyIssues');
+            if (!box) return;
+            box.addEventListener('change', function () {
+                document.querySelectorAll('tr[data-issue]').forEach(function (tr) {
+                    tr.classList.toggle('hidden', box.checked && tr.dataset.issue !== '1');
+                });
             });
         })();
     </script>

@@ -8,6 +8,7 @@ use App\Models\EquipmentItem;
 use App\Models\Waiter;
 use App\Models\EquipmentLog;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class EventEquipmentController extends Controller
 {
@@ -258,45 +259,60 @@ class EventEquipmentController extends Controller
         }
 
         try {
-            $eventEquipment->update([
-                'quantity_returned' => $validated['quantity_returned'],
-                'quantity_damaged' => $validated['quantity_damaged'],
-                'quantity_missing' => $validated['quantity_missing'],
-                'notes' => $validated['notes'],
-                'status' => $total == $eventEquipment->quantity_allocated ? 'returned' : 'partially_returned',
-                'returned_at' => now(),
-            ]);
+            // The form sends the TOTAL per condition for this allocation, so compare with what was already
+            // recorded. That way saving the same return twice (or correcting it) never counts units twice.
+            $addedGood = (int) $validated['quantity_returned'] - (int) $eventEquipment->quantity_returned;
+            $addedDamaged = (int) $validated['quantity_damaged'] - (int) $eventEquipment->quantity_damaged;
+            $addedMissing = (int) $validated['quantity_missing'] - (int) $eventEquipment->quantity_missing;
 
-            $item = $eventEquipment->equipmentItem;
-            $item->increment('available_quantity', $validated['quantity_returned']);
+            DB::transaction(function () use ($eventEquipment, $validated, $total, $addedGood, $addedDamaged, $addedMissing) {
+                $eventEquipment->update([
+                    'quantity_returned' => $validated['quantity_returned'],
+                    'quantity_damaged' => $validated['quantity_damaged'],
+                    'quantity_missing' => $validated['quantity_missing'],
+                    'notes' => $validated['notes'],
+                    'status' => $total == $eventEquipment->quantity_allocated ? 'returned' : 'partially_returned',
+                    'returned_at' => now(),
+                ]);
 
-            // Log actions
-            if ($validated['quantity_returned'] > 0) {
+                $item = EquipmentItem::lockForUpdate()->findOrFail($eventEquipment->equipment_item_id);
+
+                // Good units go back on the shelf. Damaged and missing units are gone for good, so they are
+                // taken out of the inventory itself (total), not just left "in use". Available does not change
+                // for them: it never got those units back.
+                $item->update([
+                    'available_quantity' => $item->available_quantity + $addedGood,
+                    'total_quantity' => max(0, $item->total_quantity - ($addedDamaged + $addedMissing)),
+                ]);
+            });
+
+            // Log actions (only what is new in this save)
+            if ($addedGood > 0) {
                 EquipmentLog::create([
                     'event_equipment_id' => $eventEquipment->id,
                     'logged_by' => auth()->id(),
                     'action' => 'returned',
-                    'quantity' => $validated['quantity_returned'],
+                    'quantity' => $addedGood,
                     'remarks' => $validated['notes'] ?? 'Good condition',
                 ]);
             }
 
-            if ($validated['quantity_damaged'] > 0) {
+            if ($addedDamaged > 0) {
                 EquipmentLog::create([
                     'event_equipment_id' => $eventEquipment->id,
                     'logged_by' => auth()->id(),
                     'action' => 'damaged',
-                    'quantity' => $validated['quantity_damaged'],
+                    'quantity' => $addedDamaged,
                     'remarks' => $validated['notes'] ?? 'Damaged on return',
                 ]);
             }
 
-            if ($validated['quantity_missing'] > 0) {
+            if ($addedMissing > 0) {
                 EquipmentLog::create([
                     'event_equipment_id' => $eventEquipment->id,
                     'logged_by' => auth()->id(),
                     'action' => 'missing',
-                    'quantity' => $validated['quantity_missing'],
+                    'quantity' => $addedMissing,
                     'remarks' => $validated['notes'] ?? 'Not returned',
                 ]);
             }

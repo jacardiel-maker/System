@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\EquipmentCategory;
 use App\Models\EquipmentItem;
+use App\Models\EventEquipment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Storage;
@@ -34,9 +35,25 @@ class EquipmentItemController extends Controller
             $query->where('category_id', $request->category);
         }
 
-        // Filter by condition
+        // Units reported damaged when equipment was returned from events (item id => units).
+        // Returning damaged units does not change the item's own "condition", so these are counted here.
+        $damagedUnits = EventEquipment::selectRaw('equipment_item_id, SUM(quantity_damaged) as units')
+            ->groupBy('equipment_item_id')
+            ->havingRaw('SUM(quantity_damaged) > 0')
+            ->pluck('units', 'equipment_item_id');
+
+        // Filter by condition. An item counts as "Damaged" when it is marked damaged OR damaged
+        // units were reported on a return; every item is in exactly one condition.
         if ($request->filled('condition')) {
-            $query->where('condition', $request->condition);
+            $damagedIds = $damagedUnits->keys();
+
+            if ($request->condition === 'damaged') {
+                $query->where(function ($q) use ($damagedIds) {
+                    $q->where('condition', 'damaged')->orWhereIn('id', $damagedIds);
+                });
+            } else {
+                $query->where('condition', $request->condition)->whereNotIn('id', $damagedIds);
+            }
         }
 
         // Filter by stock level
@@ -58,7 +75,7 @@ class EquipmentItemController extends Controller
 
         $items = $query->latest()->paginate(10)->withQueryString();
 
-        return view('equipment-items.index', compact('items'));
+        return view('equipment-items.index', compact('items', 'damagedUnits'));
     }
 
     public function create()

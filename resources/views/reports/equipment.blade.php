@@ -10,7 +10,15 @@
             'partially_returned' => ['bg-amber-50 text-amber-600', 'Partially Returned'],
             'lost'               => ['bg-red-50 text-red-600', 'Lost'],
         ];
-        $hasFilters = request('from') || request('to');
+        // Optional "show only records with a problem" filter
+        $issueLabels = [
+            'problem' => 'Damaged or missing',
+            'damaged' => 'Damaged',
+            'missing' => 'Missing',
+            'pending' => 'Not yet returned',
+        ];
+        $currentIssue = array_key_exists((string) request('issue'), $issueLabels) ? (string) request('issue') : '';
+        $hasFilters = request('from') || request('to') || $currentIssue !== '';
 
         // Works for a collection or a paginator
         $rows = collect($records instanceof \Illuminate\Pagination\AbstractPaginator ? $records->items() : $records);
@@ -107,7 +115,7 @@
                 <td style="text-align:right;"><strong>Generated:</strong> {{ now()->format('F d, Y h:i A') }}</td>
             </tr>
             <tr>
-                <td><strong>Records:</strong> {{ $totals['records'] }}</td>
+                <td><strong>Records:</strong> {{ $totals['records'] }}@if($currentIssue !== '') ({{ $issueLabels[$currentIssue] }} only)@endif</td>
                 <td style="text-align:right;"><strong>Prepared by:</strong> {{ auth()->user()->name }}</td>
             </tr>
         </table>
@@ -147,6 +155,7 @@
                 'orientation' => 'landscape',
                 'meta' => [
                     'Period' => $periodLabel,
+                    'Showing' => $currentIssue !== '' ? $issueLabels[$currentIssue] . ' only' : 'All records',
                     'Records' => $totals['records'],
                 ],
                 'summary' => [
@@ -174,6 +183,16 @@
                 <input id="f-to" type="date" name="to" value="{{ request('to') }}" min="{{ request('from') }}"
                     class="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent">
             </div>
+            <div class="w-full lg:w-48">
+                <label for="f-issue" class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Show</label>
+                <select id="f-issue" name="issue" onchange="this.form.submit()"
+                    class="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent bg-white">
+                    <option value="">All records</option>
+                    @foreach($issueLabels as $value => $label)
+                        <option value="{{ $value }}" {{ $currentIssue === $value ? 'selected' : '' }}>{{ $label }} only</option>
+                    @endforeach
+                </select>
+            </div>
             <div class="flex gap-2 w-full lg:w-auto">
                 <button type="submit" title="Filter" aria-label="Filter"
                     class="flex-1 lg:flex-none lg:w-9 h-8 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition flex items-center justify-center gap-2 text-xs font-semibold">
@@ -199,6 +218,12 @@
                     <span class="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-full text-xs font-medium">
                         To: {{ $toLabel }}
                         <a href="{{ $removeFilter('to') }}" class="ml-1 hover:text-emerald-900" aria-label="Remove to-date filter"><i class="fas fa-times"></i></a>
+                    </span>
+                @endif
+                @if($currentIssue !== '')
+                    <span class="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
+                        Show: {{ $issueLabels[$currentIssue] }} only
+                        <a href="{{ $removeFilter('issue') }}" class="ml-1 hover:text-blue-900" aria-label="Remove filter"><i class="fas fa-times"></i></a>
                     </span>
                 @endif
             </div>

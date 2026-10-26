@@ -14,6 +14,8 @@
             'damaged' => 'bg-red-50 text-red-600',
         ];
         $stockLabels = ['low' => 'Low Stock', 'out' => 'Out of Stock', 'available' => 'Available'];
+        // item id => units reported damaged on returns (sent by the controller)
+        $damagedUnitsMap = $damagedUnits ?? collect();
 
         $currentCondition = strtolower((string) request('condition'));
         $currentStock = strtolower((string) request('stock'));
@@ -172,6 +174,11 @@
                             $barColor = ($isOut || $isLow || $pct < 20) ? 'bg-red-500' : ($pct < 50 ? 'bg-amber-500' : 'bg-emerald-500');
 
                             $condition = strtolower(trim((string) $item->condition));
+                            // Damaged units reported on returns make the item count as damaged
+                            $itemDamagedUnits = (int) ($damagedUnitsMap[$item->id] ?? 0);
+                            if ($itemDamagedUnits > 0) {
+                                $condition = 'damaged';
+                            }
                             $conditionBadge = $conditionStyles[$condition] ?? 'bg-slate-100 text-slate-600';
                         @endphp
                         <tr class="group {{ ($isOut || $isLow) ? 'bg-red-50/40' : '' }} hover:bg-slate-50/60 transition">
@@ -215,6 +222,9 @@
                                 <span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap {{ $conditionBadge }}">
                                     {{ ucfirst($condition ?: 'unknown') }}
                                 </span>
+                                @if($itemDamagedUnits > 0)
+                                    <div class="text-[11px] text-red-600 mt-0.5 whitespace-nowrap">{{ number_format($itemDamagedUnits) }} damaged {{ \Illuminate\Support\Str::plural('unit', $itemDamagedUnits) }}</div>
+                                @endif
                             </td>
                             <td class="px-4 py-2 text-right">
                                 <div class="flex items-center justify-end gap-1.5">

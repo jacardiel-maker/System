@@ -465,9 +465,11 @@ Route::middleware(['auth'])->group(function () {
 
             $equipmentItem->load('category');
 
+            // Latest 20 allocations, plus every older one that has damaged or missing units (so they are never hidden)
             $history = \App\Models\EventEquipment::where('equipment_item_id', $equipmentItem->id)
                 ->with(['event', 'assignedWaiter.user'])
-                ->latest()->limit(20)->get()
+                ->latest()->get()
+                ->filter(fn ($a, $i) => $i < 20 || (int) $a->quantity_damaged > 0 || (int) $a->quantity_missing > 0)
                 ->map(fn ($a) => [
                     'event' => $a->event->event_name ?? 'Deleted event',
                     'dateLabel' => optional(optional($a->event)->event_date)->format('M d, Y'),
@@ -482,6 +484,13 @@ Route::middleware(['auth'])->group(function () {
             $total = (int) $equipmentItem->total_quantity;
             $available = (int) $equipmentItem->available_quantity;
 
+            // Units reported damaged on returns; the item then counts as damaged even if its own condition was not changed
+            $damagedUnits = (int) \App\Models\EventEquipment::where('equipment_item_id', $equipmentItem->id)->sum('quantity_damaged');
+            $condition = strtolower(trim((string) $equipmentItem->condition));
+            if ($damagedUnits > 0) {
+                $condition = 'damaged';
+            }
+
             return response()->json([
                 'item' => [
                     'id' => $equipmentItem->id,
@@ -491,7 +500,8 @@ Route::middleware(['auth'])->group(function () {
                     'total' => $total,
                     'available' => $available,
                     'inUse' => max($total - $available, 0),
-                    'condition' => strtolower(trim((string) $equipmentItem->condition)),
+                    'condition' => $condition,
+                    'damagedUnits' => $damagedUnits,
                     'low' => $total > 0 && ($available * 100) < ($total * 20), // same rule as the "Low Stock" filter
                 ],
                 'history' => $history,
