@@ -162,7 +162,8 @@
                             </div>
                             <div class="min-w-0">
                                 <p class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Venue</p>
-                                <p class="text-sm font-semibold text-slate-800 leading-snug break-words">{{ $event->venue_address }}</p>
+                                {{-- Click the venue to see it on a map --}}
+                                @include('partials.venue-map', ['address' => $event->venue_address])
                             </div>
                         </div>
 

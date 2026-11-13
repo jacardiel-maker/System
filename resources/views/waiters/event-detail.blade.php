@@ -130,11 +130,8 @@
                             </div>
                             <div class="min-w-0 flex-1">
                                 <p class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Venue</p>
-                                <p class="text-sm font-semibold text-slate-800 leading-snug break-words">{{ $event->venue_address }}</p>
-                                <a href="https://www.google.com/maps/search/?api=1&query={{ urlencode($event->venue_address) }}" target="_blank" rel="noopener"
-                                    class="inline-flex items-center gap-1 mt-1 text-xs font-semibold text-amber-700 hover:underline">
-                                    <i class="fas fa-directions text-[10px]"></i> Open in Maps
-                                </a>
+                                {{-- Click the venue to see it on a map --}}
+                                @include('partials.venue-map', ['address' => $event->venue_address])
                             </div>
                         </div>
 

@@ -243,8 +243,8 @@
                         <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Venue</th>
                         <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Date & Time</th>
                         <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Status</th>
-                        <th class="px-4 py-2 text-center text-[11px] font-bold text-slate-400 uppercase tracking-wider">Waiters</th>
-                        <th class="px-4 py-2 text-center text-[11px] font-bold text-slate-400 uppercase tracking-wider">Equipment</th>
+                        <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Waiters</th>
+                        <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Equipment</th>
                         <th class="px-4 py-2 text-right text-[11px] font-bold text-slate-400 uppercase tracking-wider no-print">Actions</th>
                     </tr>
                 </thead>
@@ -272,8 +272,28 @@
                             <td class="px-4 py-2">
                                 <span class="badge inline-block px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap {{ $cfg[0] }}">{{ $cfg[1] }}</span>
                             </td>
-                            <td class="px-4 py-2 text-xs text-slate-600 text-center">{{ $event->waiters_count ?? 0 }}</td>
-                            <td class="px-4 py-2 text-xs text-slate-600 text-center">{{ $event->equipment_count ?? 0 }}</td>
+                            {{-- Waiters: how many, then who (with their role; declined ones are marked) --}}
+                            <td class="px-4 py-2 text-xs text-slate-600 align-top">
+                                @php
+                                    $roleNames = ['waiter' => 'Waiter', 'head_waiter' => 'Head Waiter', 'setup_crew' => 'Setup Crew'];
+                                    $reportWaiters = $event->waiters->sortBy(fn ($w) => [($w->pivot->role === 'head_waiter' ? 0 : 1), $w->user->name ?? '']);
+                                @endphp
+                                <div class="font-semibold text-slate-700 whitespace-nowrap">{{ $event->waiters_count ?? 0 }} {{ Str::plural('waiter', $event->waiters_count ?? 0) }}</div>
+                                @foreach($reportWaiters as $w)
+                                    @php
+                                        $declined = strtolower(trim((string) $w->pivot->confirmation_status)) === 'declined';
+                                        $role = $w->pivot->role;
+                                    @endphp
+                                    <div class="text-[11px] leading-snug {{ $declined ? 'text-slate-400' : 'text-slate-600' }}">{{ $w->user->name ?? 'Unknown' }}@if($role && $role !== 'waiter') ({{ $roleNames[$role] ?? ucfirst(str_replace('_', ' ', $role)) }})@endif{{ $declined ? ' - declined' : '' }}</div>
+                                @endforeach
+                            </td>
+                            {{-- Equipment: how many kinds, then each item with its allocated quantity --}}
+                            <td class="px-4 py-2 text-xs text-slate-600 align-top">
+                                <div class="font-semibold text-slate-700 whitespace-nowrap">{{ $event->equipment_count ?? 0 }} {{ Str::plural('item', $event->equipment_count ?? 0) }}</div>
+                                @if($event->equipment->isNotEmpty())
+                                    <div class="text-[11px] leading-snug text-slate-600 max-w-[320px]">{{ $event->equipment->map(fn ($a) => ($a->equipmentItem->name ?? 'Deleted item') . ' (' . (int) $a->quantity_allocated . ')')->implode(', ') }}</div>
+                                @endif
+                            </td>
                             <td class="px-4 py-2 text-right no-print">
                                 <a href="{{ route('events.show', $event) }}"
                                     class="w-7 h-7 rounded-md bg-blue-50 text-blue-600 inline-flex items-center justify-center hover:bg-blue-600 hover:text-white transition"

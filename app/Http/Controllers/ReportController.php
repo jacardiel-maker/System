@@ -18,7 +18,8 @@ class ReportController extends Controller
 
     public function events(Request $request)
     {
-        $query = Event::withCount('waiters', 'equipment');
+        // The report lists who the waiters are and which equipment was used, not just how many
+        $query = Event::withCount('waiters', 'equipment')->with(['waiters.user', 'equipment.equipmentItem']);
 
         if ($request->filled('from')) {
             $query->whereDate('event_date', '>=', $request->from);
