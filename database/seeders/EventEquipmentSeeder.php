@@ -78,7 +78,12 @@ class EventEquipmentSeeder extends Seeder
                     );
                 }
 
-                EventEquipment::create([
+                // Dated like a real booking: handed out the day before setup, returned a few hours after the event
+                // (the logs are dated from these, so they line up with the event instead of the day of seeding)
+                $allocatedAt = ($event->setup_time ?? $event->event_date)->copy()->subDay()->setTime(14, 0);
+                $returnedAt = $event->event_date->copy()->addHours(6);
+
+                $allocation = new EventEquipment([
                     'event_id' => $event->id,
                     'equipment_item_id' => $equipment->id,
                     'assigned_waiter_id' => $mark->id,
@@ -88,8 +93,11 @@ class EventEquipmentSeeder extends Seeder
                     'quantity_missing' => 0,
                     'status' => 'returned',
                     'notes' => 'Equipment returned in good condition.',
-                    'returned_at' => $event->event_date,
+                    'returned_at' => $returnedAt,
                 ]);
+                $allocation->created_at = $allocatedAt;
+                $allocation->updated_at = $returnedAt;
+                $allocation->save();
             }
         }
 

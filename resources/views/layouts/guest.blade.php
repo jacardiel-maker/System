@@ -7,7 +7,13 @@
 
     <title>{{ config('app.name', 'E. Serve') }}</title>
 
-    <script src="https://cdn.tailwindcss.com"></script>
+    {{-- Tailwind: pre-built file when it is up to date (php artisan css:build), otherwise the slower CDN --}}
+    @php $tailwindCss = \App\Support\StaticCss::url('guest'); @endphp
+    @if($tailwindCss)
+        <link href="{{ $tailwindCss }}" rel="stylesheet">
+    @else
+        <script src="https://cdn.tailwindcss.com"></script>
+    @endif
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
@@ -21,6 +27,19 @@
         }
         .animate-float {
             animation: float 6s ease-in-out infinite;
+        }
+        /* The login / reset card rises in when the page opens */
+        .glass {
+            animation: cardIn .5s cubic-bezier(.22, 1, .36, 1) backwards;
+        }
+        @keyframes cardIn {
+            from { opacity: 0; transform: translateY(16px) scale(.98); }
+            to { opacity: 1; transform: none; }
+        }
+        button { transition: transform .15s ease, box-shadow .2s ease, background-color .15s ease; }
+        button:not(:disabled):active { transform: scale(.97); }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
         }
         @keyframes float {
             0%, 100% { transform: translateY(0px); }

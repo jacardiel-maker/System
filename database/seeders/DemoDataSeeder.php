@@ -33,6 +33,22 @@ class DemoDataSeeder extends Seeder
 
     private const WAITER_PASSWORD = 'eserveadmin';
 
+    /** A waiter's shift on an event is 8 hours. */
+    public const SHIFT_HOURS = 8;
+
+    /**
+     * When a waiter clocks in for an event: at setup time, but never more than 4 hours before
+     * the event starts, so that the 8-hour shift always covers the event itself.
+     */
+    public static function shiftStart($setupTime, $eventDate): Carbon
+    {
+        $event = Carbon::parse($eventDate);
+        $earliest = $event->copy()->subHours(4);
+        $setup = $setupTime ? Carbon::parse($setupTime) : $earliest;
+
+        return ($setup->lt($earliest) || $setup->gt($event)) ? $earliest : $setup->copy();
+    }
+
     private array $waiterNames = [
         'Rico Villanueva', 'Paolo Mendoza', 'Kevin Bautista', 'Joshua Ramos', 'Carlo Aquino',
         'Miguel Santos', 'Adrian Reyes', 'Christian Garcia', 'Jerome Navarro', 'Nathaniel Cruz',
@@ -112,7 +128,9 @@ class DemoDataSeeder extends Seeder
             return;
         }
 
-        DB::transaction(function () use ($admin) {
+        $eventsBefore = Event::count();
+
+        DB::transaction(function () use ($admin, $eventsBefore) {
             $waiters = $this->createWaiters();
             $logs = $this->createEvents($admin, $waiters);
 
@@ -125,9 +143,12 @@ class DemoDataSeeder extends Seeder
             }
 
             $this->command->info('Created 20 waiters (password: ' . self::WAITER_PASSWORD . ').');
-            $this->command->info('Created ' . self::EVENT_COUNT . ' events, '
+            $this->command->info('Created ' . (Event::count() - $eventsBefore) . ' events, '
                 . EventEquipment::count() . ' total allocations, ' . count($logs) . ' new equipment logs.');
         });
+
+        // Bell notifications for the new events (waiters, admin and owner)
+        $this->call(NotificationSeeder::class);
     }
 
     private function emailFor(string $name): string
@@ -167,16 +188,36 @@ class DemoDataSeeder extends Seeder
      */
     private function createEvents(User $admin, array $waiters): array
     {
+        // Same rule as the app: at most 2 events per day (events that already exist count too)
+        $limit = \App\Http\Controllers\EventController::MAX_EVENTS_PER_DAY;
+        $perDay = Event::where(fn ($q) => $q->whereNull('status')->orWhere('status', '!=', 'cancelled'))
+            ->get(['id', 'event_date'])
+            ->countBy(fn ($e) => $e->event_date->toDateString())
+            ->all();
+        $take = function (callable $pick) use (&$perDay, $limit) {
+            for ($try = 0; $try < 1000; $try++) {
+                $day = $pick();
+                $key = $day->toDateString();
+                if (($perDay[$key] ?? 0) < $limit) {
+                    $perDay[$key] = ($perDay[$key] ?? 0) + 1;
+                    return $day;
+                }
+            }
+            return null;
+        };
+        $pastDay = fn () => now()->subDays(mt_rand(1, 300));
+
         $dates = [];
         for ($i = 0; $i < self::PAST_EVENTS; $i++) {
-            $dates[] = now()->subDays(mt_rand(1, 300));
+            $dates[] = $take($pastDay);
         }
         for ($i = 0; $i < self::TODAY_EVENTS; $i++) {
-            $dates[] = now()->copy();
+            $dates[] = $take(fn () => now()->copy()) ?? $take($pastDay); // today already full: make it a past event
         }
         for ($i = self::PAST_EVENTS + self::TODAY_EVENTS; $i < self::EVENT_COUNT; $i++) {
-            $dates[] = now()->addDays(mt_rand(1, 14));
+            $dates[] = $take(fn () => now()->addDays(mt_rand(1, 14)));
         }
+        $dates = array_values(array_filter($dates));
         usort($dates, fn ($a, $b) => $a <=> $b);
 
         $busy = []; // 'Y-m-d' => [waiter_id, ...]  (a waiter works one event per day)
@@ -255,11 +296,14 @@ class DemoDataSeeder extends Seeder
 
             $timeIn = null;
             $timeOut = null;
-            if ($confirmation === 'confirmed' && $event->status === 'completed') {
-                $timeIn = $event->setup_time->copy()->addMinutes(mt_rand(-15, 20));
-                $timeOut = $event->event_date->copy()->addHours(mt_rand(4, 6))->addMinutes(mt_rand(0, 45));
-            } elseif ($confirmation === 'confirmed' && $event->status === 'ongoing') {
-                $timeIn = $event->setup_time->copy()->addMinutes(mt_rand(-15, 20));
+            // Attendance follows the event's own times, and a waiter works 8 hours only:
+            // time in = setup time (or 4 hours before the event if setup starts earlier than that,
+            // so the shift still covers the event), time out = exactly 8 hours after time in.
+            if ($confirmation === 'confirmed' && in_array($event->status, ['completed', 'ongoing'], true)) {
+                $timeIn = self::shiftStart($event->setup_time, $event->event_date)->addMinutes(mt_rand(-10, 10));
+                if ($event->status === 'completed') {
+                    $timeOut = $timeIn->copy()->addHours(self::SHIFT_HOURS);
+                }
             }
 
             $rows[] = [

@@ -82,17 +82,7 @@
 
             {{-- Date range only makes sense in list view (the calendar has its own navigation) --}}
             @if($view === 'list')
-                <div class="w-full lg:w-36">
-                    <label for="f-from" class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">From</label>
-                    <input id="f-from" type="date" name="from" value="{{ request('from') }}" max="{{ request('to') }}"
-                        class="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent">
-                </div>
-
-                <div class="w-full lg:w-36">
-                    <label for="f-to" class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">To</label>
-                    <input id="f-to" type="date" name="to" value="{{ request('to') }}" min="{{ request('from') }}"
-                        class="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent">
-                </div>
+            @include('partials.date-range', ['label' => 'Event Date'])
             @endif
 
             {{-- Buttons --}}
@@ -150,6 +140,12 @@
                 <span class="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600"><span class="w-2.5 h-2.5 rounded-full" style="background:#059669"></span> Completed</span>
                 <span class="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600"><span class="w-2.5 h-2.5 rounded-full" style="background:#dc2626"></span> Cancelled</span>
             </div>
+
+            @unless($readOnly)
+                <p class="mb-3 text-xs text-slate-500"><i class="fas fa-hand-pointer text-amber-500 mr-1"></i> Click a day to schedule a new event on it. A day can hold up to {{ \App\Http\Controllers\EventController::MAX_EVENTS_PER_DAY }} events.</p>
+                <div id="calendarNotice" role="alert" class="hidden mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700"></div>
+                <style>#calendar .fc-daygrid-day:not(.fc-day-past), #calendar .fc-timegrid-col:not(.fc-day-past) { cursor: pointer; } #calendar .fc-daygrid-day:not(.fc-day-past):hover { background: #fffbeb; }</style>
+            @endunless
 
             <div id="calendar"></div>
         </div>
@@ -318,6 +314,33 @@
                         return ev;
                     },
 
+                    @unless($readOnly)
+                    // Click an empty day to schedule an event on it (past days and fully booked days are refused).
+                    dateClick: function (info) {
+                        const day = info.dateStr.slice(0, 10);
+                        const now = new Date();
+                        const today = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+                        if (day < today) {
+                            showCalendarNotice('You cannot schedule an event on a past date.');
+                            return;
+                        }
+                        fetch(@json(route('events.availability')) + '?date=' + day, {
+                            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                            credentials: 'same-origin'
+                        })
+                            .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+                            .then(function (data) {
+                                if (data.full) {
+                                    const pretty = new Date(day + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+                                    showCalendarNotice(pretty + ' is fully booked. Only ' + data.limit + ' events can be scheduled per day.');
+                                    return;
+                                }
+                                window.location.href = @json(route('events.create')) + '?date=' + day;
+                            })
+                            .catch(function () { window.location.href = @json(route('events.create')) + '?date=' + day; });
+                    },
+                    @endunless
+
                     eventDidMount: function (info) {
                         const p = info.event.extendedProps;
                         const status = p.status || '';
@@ -327,6 +350,17 @@
                             + (status ? ' [' + status + ']' : '');
                     }
                 });
+
+                // Small message above the calendar (used when a clicked day cannot be booked)
+                let noticeTimer = null;
+                function showCalendarNotice(text) {
+                    const box = document.getElementById('calendarNotice');
+                    if (!box) return;
+                    box.textContent = text;
+                    box.classList.remove('hidden');
+                    clearTimeout(noticeTimer);
+                    noticeTimer = setTimeout(function () { box.classList.add('hidden'); }, 6000);
+                }
 
                 calendar.render();
             });
@@ -378,6 +412,9 @@
                                     <span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap {{ $badge }}">
                                         {{ ucfirst($status ?: 'scheduled') }}
                                     </span>
+                                    @if(($status === 'scheduled' || $status === '') && (($event->waiters_count ?? 0) == 0 || ($event->equipment_count ?? 0) == 0))
+                                        <span class="block mt-0.5 text-[10px] font-semibold text-amber-600 whitespace-nowrap" title="Waiters and equipment must be set up before the event"><i class="fas fa-triangle-exclamation"></i> Setup incomplete</span>
+                                    @endif
                                 </td>
                                 <td class="px-4 py-2 text-xs text-slate-500">
                                     <div class="flex items-center gap-1">
@@ -496,13 +533,6 @@
                     if (e.key === 'Escape') window.closeDeleteDialog();
                 });
 
-                // Keep From <= To while picking dates
-                const from = document.getElementById('f-from');
-                const to = document.getElementById('f-to');
-                if (from && to) {
-                    from.addEventListener('change', () => { to.min = from.value; });
-                    to.addEventListener('change', () => { from.max = to.value; });
-                }
             })();
         </script>
     @endif

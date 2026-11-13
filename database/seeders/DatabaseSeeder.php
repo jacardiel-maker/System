@@ -22,6 +22,14 @@ class DatabaseSeeder extends Seeder
             'role' => 'admin',
         ]);
 
+        // 2b. Owner User (monitoring only: Dashboard + Reports)
+        User::create([
+            'name' => 'Owner',
+            'email' => 'eserveowner@gmail.com',
+            'password' => Hash::make('eserveadmin'),
+            'role' => 'owner',
+        ]);
+
         // 3. Equipment Categories
         $categories = [
             [
@@ -91,11 +99,14 @@ class DatabaseSeeder extends Seeder
             WaiterSeeder::class,
             EventSeeder::class,
             EventEquipmentSeeder::class,
+            EquipmentLogSeeder::class, // every allocation above gets its matching logs
+            NotificationSeeder::class, // bell notifications for the waiters, admin and owner
         ]);
 
         $this->command->info('=================================================');
         $this->command->info('All seeders completed successfully!');
-        $this->command->info('Login: eserveadmin@gmail.com / eserveadmin');
+        $this->command->info('Admin login: eserveadmin@gmail.com / eserveadmin');
+        $this->command->info('Owner login: eserveowner@gmail.com / eserveadmin');
         $this->command->info('=================================================');
     }
 }

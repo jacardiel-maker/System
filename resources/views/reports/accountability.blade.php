@@ -50,7 +50,8 @@
                     $name = $r->equipmentItem->name ?? 'Deleted item';
                     $eventName = $r->event->event_name ?? 'Deleted event';
                     $eventDate = $r->event?->event_date?->format('M d');
-                    return $name . ' (' . implode(', ', $parts) . ') - ' . $eventName . ($eventDate ? ', ' . $eventDate : '');
+                    $customer = $r->event?->customer_name;
+                    return $name . ' (' . implode(', ', $parts) . ') - ' . $eventName . ($customer ? ' / ' . $customer : '') . ($eventDate ? ', ' . $eventDate : '');
                 })->filter()->values();
 
                 $severity = $missing > 0 ? 'critical' : ($damaged > 0 ? 'high' : ($pending > 0 ? 'medium' : 'low'));

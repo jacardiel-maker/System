@@ -150,6 +150,86 @@
         {{-- Main Content --}}
         <div class="lg:col-span-8 xl:col-span-9 space-y-4">
 
+            {{-- Individual schedule (calendar of this waiter's own events) --}}
+            @php
+                $confColors = ['confirmed' => '#059669', 'pending' => '#d97706', 'declined' => '#dc2626'];
+                $scheduleEvents = $waiter->events->filter(fn ($e) => $e->event_date)->map(function ($e) use ($confColors, $roleLabels) {
+                    $conf = strtolower(trim((string) $e->pivot->confirmation_status)) ?: 'pending';
+                    $cancelled = strtolower(trim((string) $e->status)) === 'cancelled';
+                    return [
+                        'title' => $e->event_name,
+                        'start' => $e->event_date->toIso8601String(),
+                        'url' => route('events.show', $e),
+                        'color' => $cancelled ? '#94a3b8' : ($confColors[$conf] ?? '#64748b'),
+                        'extendedProps' => [
+                            'role' => $roleLabels[$e->pivot->role] ?? ucfirst(str_replace('_', ' ', (string) $e->pivot->role)),
+                            'confirmation' => $cancelled ? 'event cancelled' : $conf,
+                            'venue' => $e->venue_address,
+                        ],
+                    ];
+                })->values();
+            @endphp
+            <div class="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+                <div class="px-4 py-3 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-800">Schedule</h2>
+                        <p class="text-xs text-slate-400">{{ $name }}'s assigned events. Click an event to open it.</p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-3 text-[11px] font-medium text-slate-500">
+                        <span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full" style="background:#059669"></span> Confirmed</span>
+                        <span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full" style="background:#d97706"></span> Pending</span>
+                        <span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full" style="background:#dc2626"></span> Declined</span>
+                        <span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full" style="background:#94a3b8"></span> Cancelled event</span>
+                    </div>
+                </div>
+                <div class="p-3 sm:p-4">
+                    <div id="waiterCalendar"></div>
+                </div>
+            </div>
+            <style>
+                #waiterCalendar { --fc-border-color: #e8eaed; --fc-today-bg-color: #fffbeb; --fc-event-border-color: transparent; --fc-event-text-color: #fff;
+                    --fc-button-bg-color: #fff; --fc-button-border-color: #dadce0; --fc-button-text-color: #3c4043; --fc-button-hover-bg-color: #f1f3f4; --fc-button-hover-border-color: #dadce0;
+                    --fc-button-active-bg-color: #fef3c7; --fc-button-active-border-color: #fcd34d; font-size: 12px; color: #3c4043; }
+                #waiterCalendar .fc-header-toolbar { margin-bottom: .75rem; gap: .5rem; flex-wrap: wrap; }
+                #waiterCalendar .fc-toolbar-title { font-size: 1rem; font-weight: 600; }
+                #waiterCalendar .fc-button { padding: .25rem .65rem; font-size: .75rem; font-weight: 500; text-transform: none; box-shadow: none !important; }
+                #waiterCalendar .fc-button-primary:not(:disabled).fc-button-active { color: #92400e; }
+                #waiterCalendar .fc-col-header-cell-cushion { padding: 6px 4px; font-size: 10px; font-weight: 600; letter-spacing: .6px; text-transform: uppercase; color: #70757a; text-decoration: none; }
+                #waiterCalendar .fc-daygrid-day-number { font-size: 11px; color: #3c4043; text-decoration: none; }
+                #waiterCalendar .fc-daygrid-day-frame { min-height: 4.5rem; }
+                #waiterCalendar .fc-event { border-radius: 4px; cursor: pointer; font-weight: 500; }
+                #waiterCalendar .fc-daygrid-block-event { margin: 1px 3px; padding: 1px 5px; }
+                #waiterCalendar .fc-list-event-title { font-weight: 500; }
+            </style>
+            <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+            <script>
+                document.addEventListener('DOMContentLoaded', function () {
+                    const el = document.getElementById('waiterCalendar');
+                    if (!el || !window.FullCalendar) return;
+                    new FullCalendar.Calendar(el, {
+                        initialView: window.innerWidth < 640 ? 'listMonth' : 'dayGridMonth',
+                        headerToolbar: { left: 'today prev,next title', center: '', right: 'dayGridMonth,timeGridWeek,listMonth' },
+                        buttonText: { today: 'Today', month: 'Month', week: 'Week', list: 'Schedule' },
+                        height: 'auto',
+                        fixedWeekCount: false,
+                        nowIndicator: true,
+                        eventDisplay: 'block',
+                        displayEventEnd: false,
+                        dayMaxEvents: 3,
+                        allDaySlot: false,
+                        slotMinTime: '06:00:00',
+                        eventTimeFormat: { hour: 'numeric', minute: '2-digit', meridiem: 'short', omitZeroMinute: true },
+                        noEventsContent: 'No events scheduled for this waiter in this period.',
+                        views: { timeGridWeek: { height: 560 } },
+                        events: @json($scheduleEvents),
+                        eventDidMount: function (info) {
+                            const p = info.event.extendedProps || {};
+                            info.el.title = info.event.title + ' — ' + (p.role || 'Waiter') + ', ' + (p.confirmation || 'pending') + (p.venue ? ' @ ' + p.venue : '');
+                        }
+                    }).render();
+                });
+            </script>
+
             {{-- Event History --}}
             <div class="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
                 <div class="px-4 py-3 border-b border-slate-100">

@@ -38,8 +38,8 @@
         @method('PUT')
 
         {{-- Allocation Details --}}
-        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-            <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200">
+            <div class="rounded-t-2xl px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
                 <div class="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
@@ -52,7 +52,7 @@
                 <div class="space-y-1.5">
                     <label class="block text-sm font-semibold text-slate-700">Event <span class="text-rose-500">*</span></label>
                     <div class="relative">
-                        <select name="event_id" required
+                        <select name="event_id" required data-searchable="Search event..." data-required-message="Please select an event."
                             class="w-full rounded-xl border-slate-200 bg-slate-50/50 px-4 py-2.5 text-sm text-slate-900 focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/20 transition-all appearance-none cursor-pointer @error('event_id') border-rose-500 focus:border-rose-500 focus:ring-rose-500/20 @enderror">
                             @foreach($events as $event)
                                 <option value="{{ $event->id }}" {{ old('event_id', $eventEquipment->event_id) == $event->id ? 'selected' : '' }}>
@@ -70,7 +70,7 @@
                 <div class="space-y-1.5">
                     <label class="block text-sm font-semibold text-slate-700">Equipment Item <span class="text-rose-500">*</span></label>
                     <div class="relative">
-                        <select name="equipment_item_id" required
+                        <select name="equipment_item_id" required data-searchable="Search equipment item..." data-required-message="Please select an equipment item."
                             class="w-full rounded-xl border-slate-200 bg-slate-50/50 px-4 py-2.5 text-sm text-slate-900 focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/20 transition-all appearance-none cursor-pointer @error('equipment_item_id') border-rose-500 focus:border-rose-500 focus:ring-rose-500/20 @enderror">
                             @foreach($items as $item)
                                 @php
@@ -91,7 +91,7 @@
                 <div class="space-y-1.5">
                     <label class="block text-sm font-semibold text-slate-700">Assign To Waiter <span class="text-rose-500">*</span></label>
                     <div class="relative">
-                        <select name="assigned_waiter_id" required
+                        <select name="assigned_waiter_id" required data-searchable="Search waiter..." data-required-message="Please select a waiter."
                             class="w-full rounded-xl border-slate-200 bg-slate-50/50 px-4 py-2.5 text-sm text-slate-900 focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/20 transition-all appearance-none cursor-pointer @error('assigned_waiter_id') border-rose-500 focus:border-rose-500 focus:ring-rose-500/20 @enderror">
                             @foreach($waiters as $waiter)
                                 <option value="{{ $waiter->id }}" {{ old('assigned_waiter_id', $eventEquipment->assigned_waiter_id) == $waiter->id ? 'selected' : '' }}>
@@ -142,4 +142,5 @@
         </div>
     </form>
 </div>
+@include('partials.searchable-select')
 @endsection

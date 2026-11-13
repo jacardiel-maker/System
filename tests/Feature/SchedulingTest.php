@@ -271,4 +271,156 @@ class SchedulingTest extends TestCase
 
         $response->assertForbidden();
     }
+
+    /** Form data for creating / updating an event on the given day. */
+    private function eventPayload(\Carbon\Carbon $day, array $overrides = []): array
+    {
+        return array_merge([
+            'event_name' => 'Third Event',
+            'customer_name' => 'Pedro Reyes',
+            'venue_address' => 'Poblacion, Nabua, Camarines Sur',
+            'event_date' => $day->copy()->setTime(18, 0)->format('Y-m-d H:i:s'),
+            'setup_time' => $day->copy()->setTime(13, 0)->format('Y-m-d H:i:s'),
+            'guest_count' => 80,
+        ], $overrides);
+    }
+
+    /** TC-SCH-A06: Only 2 events can be scheduled per day */
+    public function test_a_third_event_on_the_same_day_is_blocked(): void
+    {
+        Notification::fake();
+        Mail::fake();
+
+        $admin = $this->admin();
+        $day = now()->addDays(30)->startOfDay();
+
+        $this->event($admin, ['event_name' => 'Morning Event', 'event_date' => $day->copy()->setTime(9, 0), 'setup_time' => $day->copy()->setTime(6, 0)]);
+
+        // Second event on that day is still allowed
+        $this->actingAs($admin)->post(route('events.store'), $this->eventPayload($day, ['event_name' => 'Second Event']))
+            ->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('events', ['event_name' => 'Second Event']);
+
+        // Third one is refused
+        $this->actingAs($admin)->post(route('events.store'), $this->eventPayload($day))
+            ->assertSessionHasErrors('event_date');
+        $this->assertDatabaseMissing('events', ['event_name' => 'Third Event']);
+
+        // The availability check used by the form and the calendar reports the day as full
+        $this->actingAs($admin)->getJson(route('events.availability', ['date' => $day->toDateString()]))
+            ->assertOk()
+            ->assertJson(['full' => true, 'limit' => 2]);
+    }
+
+    /** TC-SCH-A07: A cancelled event does not take up one of the 2 slots */
+    public function test_cancelled_events_do_not_count_toward_the_daily_limit(): void
+    {
+        Notification::fake();
+        Mail::fake();
+
+        $admin = $this->admin();
+        $day = now()->addDays(31)->startOfDay();
+
+        $this->event($admin, ['event_date' => $day->copy()->setTime(9, 0), 'setup_time' => $day->copy()->setTime(6, 0)]);
+        $this->event($admin, ['event_date' => $day->copy()->setTime(14, 0), 'setup_time' => $day->copy()->setTime(10, 0), 'status' => 'cancelled']);
+
+        $this->actingAs($admin)->post(route('events.store'), $this->eventPayload($day))
+            ->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('events', ['event_name' => 'Third Event']);
+    }
+
+    /** TC-SCH-A08: An event cannot be moved to a day that is already full */
+    public function test_an_event_cannot_be_moved_to_a_fully_booked_day(): void
+    {
+        Notification::fake();
+        Mail::fake();
+
+        $admin = $this->admin();
+        $fullDay = now()->addDays(32)->startOfDay();
+        $otherDay = now()->addDays(33)->startOfDay();
+
+        $this->event($admin, ['event_date' => $fullDay->copy()->setTime(9, 0), 'setup_time' => $fullDay->copy()->setTime(6, 0)]);
+        $this->event($admin, ['event_date' => $fullDay->copy()->setTime(15, 0), 'setup_time' => $fullDay->copy()->setTime(11, 0)]);
+        $moving = $this->event($admin, ['event_name' => 'Moving Event', 'event_date' => $otherDay->copy()->setTime(15, 0), 'setup_time' => $otherDay->copy()->setTime(11, 0)]);
+
+        $this->actingAs($admin)->put(route('events.update', $moving), $this->eventPayload($fullDay, ['event_name' => 'Moving Event', 'status' => 'scheduled']))
+            ->assertSessionHasErrors('event_date');
+        $this->assertSame($otherDay->toDateString(), $moving->fresh()->event_date->toDateString());
+
+        // Editing an event without changing its day still works, even though that day is full
+        $staying = Event::whereDate('event_date', $fullDay->toDateString())->first();
+        $this->actingAs($admin)->put(route('events.update', $staying), $this->eventPayload($fullDay, ['event_name' => 'Renamed Event', 'status' => 'scheduled']))
+            ->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('events', ['id' => $staying->id, 'event_name' => 'Renamed Event']);
+    }
+
+    /** TC-SCH-A09: Setup must be scheduled before the event */
+    public function test_setup_time_must_be_before_the_event(): void
+    {
+        $admin = $this->admin();
+        $day = now()->addDays(34)->startOfDay();
+        $event = $this->event($admin, ['event_date' => $day->copy()->setTime(15, 0), 'setup_time' => $day->copy()->setTime(11, 0)]);
+
+        $late = ['setup_time' => $day->copy()->setTime(20, 0)->format('Y-m-d H:i:s')];
+
+        $this->actingAs($admin)->post(route('events.store'), $this->eventPayload($day, $late))
+            ->assertSessionHasErrors('setup_time');
+        $this->actingAs($admin)->put(route('events.update', $event), $this->eventPayload($day, $late + ['status' => 'scheduled']))
+            ->assertSessionHasErrors('setup_time');
+    }
+
+    /** TC-SCH-A10: An event cannot start until waiters and equipment are set up */
+    public function test_event_cannot_be_marked_ongoing_before_waiters_and_equipment_are_set_up(): void
+    {
+        Notification::fake();
+        Mail::fake();
+
+        $admin = $this->admin();
+        $waiter = $this->waiter();
+        $day = now()->addDays(35)->startOfDay();
+        $event = $this->event($admin, ['event_date' => $day->copy()->setTime(15, 0), 'setup_time' => $day->copy()->setTime(11, 0)]);
+
+        $payload = $this->eventPayload($day, ['status' => 'ongoing', 'waiters' => [['id' => $waiter->id, 'role' => 'waiter']]]);
+
+        // No equipment allocated yet
+        $this->actingAs($admin)->put(route('events.update', $event), $payload)->assertSessionHasErrors('status');
+        $this->assertSame('scheduled', $event->fresh()->status);
+
+        $category = \App\Models\EquipmentCategory::create(['name' => 'Plates', 'code' => 'PLT']);
+        $item = \App\Models\EquipmentItem::create([
+            'category_id' => $category->id, 'name' => 'Dinner Plate', 'total_quantity' => 50, 'available_quantity' => 40, 'condition' => 'good',
+        ]);
+        \App\Models\EventEquipment::create([
+            'event_id' => $event->id, 'equipment_item_id' => $item->id, 'assigned_waiter_id' => $waiter->id,
+            'quantity_allocated' => 10, 'status' => 'allocated',
+        ]);
+
+        $this->actingAs($admin)->put(route('events.update', $event), $payload)->assertSessionHasNoErrors();
+        $this->assertSame('ongoing', $event->fresh()->status);
+    }
+
+    /** TC-SCH-A11: Picking a day on the calendar opens the form with that day filled in */
+    public function test_create_form_is_prefilled_with_the_day_picked_on_the_calendar(): void
+    {
+        $admin = $this->admin();
+        $day = now()->addDays(36)->toDateString();
+
+        $this->actingAs($admin)->get(route('events.create', ['date' => $day]))
+            ->assertOk()
+            ->assertSee('value="' . $day . 'T12:00"', false);
+    }
+
+    /** TC-SCH-A12: The waiter profile shows that waiter's own schedule calendar */
+    public function test_waiter_profile_shows_an_individual_schedule_calendar(): void
+    {
+        $admin = $this->admin();
+        $waiter = $this->waiter('Calendar Waiter');
+        $event = $this->event($admin, ['event_name' => 'Calendar Wedding']);
+        $event->waiters()->attach($waiter->id, ['role' => 'waiter', 'confirmation_status' => 'confirmed']);
+
+        $this->actingAs($admin)->get(route('waiters.show', $waiter))
+            ->assertOk()
+            ->assertSee('id="waiterCalendar"', false)
+            ->assertSee('Calendar Wedding');
+    }
 }

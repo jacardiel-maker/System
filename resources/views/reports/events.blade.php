@@ -155,16 +155,7 @@
     {{-- ================= FILTERS ================= --}}
     <div class="bg-white rounded-xl border border-slate-100 shadow-sm p-3 mb-3 no-print">
         <form action="{{ route('reports.events') }}" method="GET" class="flex flex-col lg:flex-row gap-2 lg:items-end">
-            <div class="w-full lg:w-40">
-                <label for="f-from" class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">From Date</label>
-                <input id="f-from" type="date" name="from" value="{{ request('from') }}" max="{{ request('to') }}"
-                    class="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent">
-            </div>
-            <div class="w-full lg:w-40">
-                <label for="f-to" class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">To Date</label>
-                <input id="f-to" type="date" name="to" value="{{ request('to') }}" min="{{ request('from') }}"
-                    class="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent">
-            </div>
+            @include('partials.date-range', ['label' => 'Event Date'])
             <div class="w-full lg:w-40">
                 <label for="f-status" class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Status</label>
                 <select id="f-status" name="status" onchange="this.form.submit()"
@@ -248,6 +239,7 @@
                     <tr class="bg-slate-50/50 border-b border-slate-100">
                         <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider w-10">#</th>
                         <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Event</th>
+                        <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Customer</th>
                         <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Venue</th>
                         <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Date & Time</th>
                         <th class="px-4 py-2 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Status</th>
@@ -267,6 +259,7 @@
                             <td class="px-4 py-2">
                                 <span class="text-xs font-semibold text-slate-800 group-hover:text-amber-600 transition">{{ $event->event_name }}</span>
                             </td>
+                            <td class="px-4 py-2 text-xs text-slate-600">{{ $event->customer_name ?: '—' }}</td>
                             <td class="px-4 py-2 text-xs text-slate-500">
                                 {{-- full address on paper, shortened on screen --}}
                                 <span class="no-print" title="{{ $event->venue_address }}">{{ Str::limit($event->venue_address, 35) }}</span>
@@ -291,7 +284,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="px-4 py-8 text-center text-slate-400">
+                            <td colspan="9" class="px-4 py-8 text-center text-slate-400">
                                 <i class="fas fa-calendar-times text-2xl mb-2 text-slate-200 block no-print"></i>
                                 <p class="text-xs">No events found for the selected filters.</p>
                                 @if($hasFilters)
@@ -304,7 +297,7 @@
                 @if($summary['total'] > 0)
                     <tfoot class="print-only">
                         <tr>
-                            <td colspan="5" style="text-align:right; font-weight:700;">TOTAL</td>
+                            <td colspan="6" style="text-align:right; font-weight:700;">TOTAL</td>
                             <td style="text-align:center; font-weight:700;">{{ $summary['waiters'] }}</td>
                             <td style="text-align:center; font-weight:700;">{{ $summary['equipment'] }}</td>
                         </tr>
@@ -347,13 +340,4 @@
         </p>
     </div>
 
-    <script>
-        (function () {
-            // Keep From <= To while picking dates
-            const from = document.getElementById('f-from');
-            const to = document.getElementById('f-to');
-            from.addEventListener('change', () => { to.min = from.value; });
-            to.addEventListener('change', () => { from.max = to.value; });
-        })();
-    </script>
 @endsection

@@ -173,16 +173,7 @@
     {{-- ================= FILTERS ================= --}}
     <div class="bg-white rounded-xl border border-slate-100 shadow-sm p-3 mb-3 no-print">
         <form action="{{ route('reports.equipment') }}" method="GET" class="flex flex-col lg:flex-row gap-2 lg:items-end">
-            <div class="w-full lg:w-40">
-                <label for="f-from" class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">From Date</label>
-                <input id="f-from" type="date" name="from" value="{{ request('from') }}" max="{{ request('to') }}"
-                    class="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent">
-            </div>
-            <div class="w-full lg:w-40">
-                <label for="f-to" class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">To Date</label>
-                <input id="f-to" type="date" name="to" value="{{ request('to') }}" min="{{ request('from') }}"
-                    class="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent">
-            </div>
+            @include('partials.date-range', ['label' => 'Event Date'])
             <div class="w-full lg:w-48">
                 <label for="f-issue" class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Show</label>
                 <select id="f-issue" name="issue" onchange="this.form.submit()"
@@ -288,8 +279,11 @@
                             <td class="px-4 py-2 text-xs text-slate-400">{{ $loop->iteration }}</td>
                             <td class="px-4 py-2">
                                 @if($event)
-                                    <span class="block text-xs font-semibold text-slate-800 leading-tight">{{ $event->event_name }}</span>
-                                    <span class="block text-[11px] text-slate-400 leading-tight">{{ $event->event_date?->format('M d, Y') }}</span>
+                                    <div class="text-xs font-semibold text-slate-800 leading-tight">{{ $event->event_name }}</div>
+                                    @if($event->customer_name)
+                                        <div class="text-[11px] text-slate-600 leading-tight">Customer: {{ $event->customer_name }}</div>
+                                    @endif
+                                    <div class="text-[11px] text-slate-400 leading-tight">{{ $event->event_date?->format('M d, Y') }}</div>
                                 @else
                                     <span class="text-xs text-slate-400 italic">Deleted event</span>
                                 @endif
@@ -369,13 +363,4 @@
         </p>
     </div>
 
-    <script>
-        (function () {
-            // Keep From <= To while picking dates
-            const from = document.getElementById('f-from');
-            const to = document.getElementById('f-to');
-            from.addEventListener('change', () => { to.min = from.value; });
-            to.addEventListener('change', () => { from.max = to.value; });
-        })();
-    </script>
 @endsection

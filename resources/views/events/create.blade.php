@@ -94,7 +94,11 @@
                         <label class="block text-sm font-semibold text-slate-700">
                             Event Date & Time <span class="text-rose-500">*</span>
                         </label>
-                        <input id="event_date" type="datetime-local" name="event_date" value="{{ old('event_date') }}" required
+                        @php
+                            // Opened from a day on the calendar (?date=YYYY-MM-DD): start with that day filled in
+                            $pickedDay = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) request('date')) ? request('date') : null;
+                        @endphp
+                        <input id="event_date" type="datetime-local" name="event_date" value="{{ old('event_date', $pickedDay ? $pickedDay . 'T12:00' : '') }}" required
                             class="w-full rounded-xl border-slate-200 bg-slate-50/50 px-4 py-2.5 text-sm text-slate-900 focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/20 transition-all @error('event_date') border-rose-500 focus:border-rose-500 focus:ring-rose-500/20 @enderror">
                         @error('event_date')
                             <p class="text-xs text-rose-600 font-medium">{{ $message }}</p>
@@ -105,7 +109,7 @@
                         <label class="block text-sm font-semibold text-slate-700">
                             Setup Time <span class="text-rose-500">*</span>
                         </label>
-                        <input type="datetime-local" name="setup_time" value="{{ old('setup_time') }}" required
+                        <input type="datetime-local" name="setup_time" value="{{ old('setup_time', $pickedDay ? $pickedDay . 'T08:00' : '') }}" required
                             class="w-full rounded-xl border-slate-200 bg-slate-50/50 px-4 py-2.5 text-sm text-slate-900 focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/20 transition-all @error('setup_time') border-rose-500 focus:border-rose-500 focus:ring-rose-500/20 @enderror">
                         @error('setup_time')
                             <p class="text-xs text-rose-600 font-medium">{{ $message }}</p>
@@ -430,16 +434,34 @@
             renderWarning();
         }
 
-        function renderPanel(day, events) {
+        // Only `limit` events can be booked per day: a full day blocks the Save button (the server refuses it too).
+        function setDayFull(full) {
+            const submit = dateInput.form ? dateInput.form.querySelector('button[type="submit"]') : null;
+            if (!submit) return;
+            submit.disabled = full;
+            submit.classList.toggle('opacity-50', full);
+            submit.classList.toggle('cursor-not-allowed', full);
+            submit.title = full ? 'This day is fully booked. Pick another date.' : '';
+        }
+
+        function renderPanel(day, events, full, limit) {
             panel.replaceChildren();
+            setDayFull(full);
             if (!events.length) {
                 panel.className = 'rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800';
                 panel.textContent = 'No other events on ' + prettyDay(day) + '. All active waiters are free that day.';
                 return;
             }
-            panel.className = 'rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900';
-            panel.appendChild(make('p', 'font-semibold mb-1.5',
-                events.length + ' other ' + (events.length > 1 ? 'events' : 'event') + ' on ' + prettyDay(day) + ':'));
+            if (full) {
+                panel.className = 'rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800';
+                panel.appendChild(make('p', 'font-semibold mb-1.5',
+                    prettyDay(day) + ' is fully booked (' + events.length + ' of ' + limit + ' events). Please pick another date.'));
+            } else {
+                panel.className = 'rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900';
+                panel.appendChild(make('p', 'font-semibold mb-1.5',
+                    events.length + ' other ' + (events.length > 1 ? 'events' : 'event') + ' on ' + prettyDay(day)
+                    + ' (maximum of ' + limit + ' events per day):'));
+            }
 
             const list = make('ul', 'space-y-1');
             events.forEach(ev => {
@@ -465,6 +487,7 @@
                 loadedDay = null;
                 busy = {};
                 panel.classList.add('hidden');
+                setDayFull(false);
                 renderRows('none');
                 return;
             }
@@ -489,7 +512,7 @@
 
                 busy = data.busy || {};
                 loadedDay = day;
-                renderPanel(day, data.events || []);
+                renderPanel(day, data.events || [], !!data.full, data.limit || 2);
                 panel.classList.remove('hidden');
                 renderRows('ready');
             } catch (e) {
@@ -497,6 +520,7 @@
                 busy = {};
                 loadedDay = null;
                 panel.classList.add('hidden');
+                setDayFull(false);
                 renderRows('error');
             }
         }

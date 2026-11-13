@@ -8,13 +8,24 @@
 
     <title>@yield('title', 'E-Serve')</title>
 
-    <script src="https://cdn.tailwindcss.com"></script>
+    {{-- Tailwind: the pre-built file (php artisan css:build) is fast. If it is missing or a view was
+         changed since the last build, fall back to the CDN, which compiles in the browser (slower). --}}
+    @php $tailwindCss = \App\Support\StaticCss::url('app'); @endphp
+    @if($tailwindCss)
+        <link href="{{ $tailwindCss }}" rel="stylesheet">
+    @else
+        <script src="https://cdn.tailwindcss.com"></script>
+    @endif
 
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
 
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
         rel="stylesheet">
 
+    @unless($tailwindCss)
+    {{-- Keep this the same as tailwind.app.config.js --}}
     <script>
         tailwind.config = {
             theme: {
@@ -45,6 +56,7 @@
             }
         }
     </script>
+    @endunless
 
     <style>
         * {
@@ -148,7 +160,134 @@
             outline: none;
         }
 
+        /* ============================ ANIMATIONS ============================
+           Short and subtle, and all in one place. Every animation ends at "transform: none" and does not
+           keep applying afterwards (fill-mode: backwards), so pop-ups, sticky headers and charts are not affected.
+           Switched off for printing and for people who turned on "reduce motion" on their device. */
+        @keyframes riseIn {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: none; }
+        }
+
+        @keyframes softIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes popIn {
+            from { opacity: 0; transform: translateY(10px) scale(.96); }
+            to { opacity: 1; transform: none; }
+        }
+
+        @keyframes dropIn {
+            from { opacity: 0; transform: translateY(-6px); }
+            to { opacity: 1; transform: none; }
+        }
+
+        @keyframes rowIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: none; }
+        }
+
+        @keyframes bellRing {
+            0%, 100% { transform: rotate(0); }
+            20% { transform: rotate(14deg); }
+            40% { transform: rotate(-12deg); }
+            60% { transform: rotate(8deg); }
+            80% { transform: rotate(-5deg); }
+        }
+
+        /* Page enter: the sections of a page rise in one after another */
+        main > *:not(.fixed):not(script):not(style),
+        main > div.flex.flex-col.gap-4 > *:not(.fixed):not(script):not(style) {
+            /* written out one by one (no "animation:" shorthand) so the delays below are not reset */
+            animation-name: riseIn;
+            animation-duration: .4s;
+            animation-timing-function: cubic-bezier(.22, 1, .36, 1);
+            animation-fill-mode: backwards;
+        }
+
+        main > *:nth-child(2), main > div.flex.flex-col.gap-4 > *:nth-child(2) { animation-delay: .05s; }
+        main > *:nth-child(3), main > div.flex.flex-col.gap-4 > *:nth-child(3) { animation-delay: .1s; }
+        main > *:nth-child(4), main > div.flex.flex-col.gap-4 > *:nth-child(4) { animation-delay: .15s; }
+        main > *:nth-child(5), main > div.flex.flex-col.gap-4 > *:nth-child(5) { animation-delay: .2s; }
+        main > *:nth-child(n+6), main > div.flex.flex-col.gap-4 > *:nth-child(n+6) { animation-delay: .25s; }
+
+        /* The page wrapper of the dashboards only fades, its rows do the rising */
+        main > div.flex.flex-col.gap-4 { animation-name: softIn; }
+
+        /* Tables: the first rows slide in one by one (only the first 12, so long lists and reports stay fast) */
+        main table tbody:not(#drillBody) > tr:nth-child(-n+12) {
+            animation-name: rowIn;
+            animation-duration: .3s;
+            animation-timing-function: ease-out;
+            animation-fill-mode: backwards;
+        }
+
+        /* ...but not the calendar grids (they are tables too and redraw on every month / week change) */
+        main .fc tbody > tr { animation: none !important; }
+
+        main table tbody:not(#drillBody) > tr:nth-child(1) { animation-delay: .12s; }
+        main table tbody:not(#drillBody) > tr:nth-child(2) { animation-delay: .15s; }
+        main table tbody:not(#drillBody) > tr:nth-child(3) { animation-delay: .18s; }
+        main table tbody:not(#drillBody) > tr:nth-child(4) { animation-delay: .21s; }
+        main table tbody:not(#drillBody) > tr:nth-child(5) { animation-delay: .24s; }
+        main table tbody:not(#drillBody) > tr:nth-child(6) { animation-delay: .27s; }
+        main table tbody:not(#drillBody) > tr:nth-child(7) { animation-delay: .3s; }
+        main table tbody:not(#drillBody) > tr:nth-child(8) { animation-delay: .33s; }
+        main table tbody:not(#drillBody) > tr:nth-child(9) { animation-delay: .36s; }
+        main table tbody:not(#drillBody) > tr:nth-child(10) { animation-delay: .39s; }
+        main table tbody:not(#drillBody) > tr:nth-child(11) { animation-delay: .42s; }
+        main table tbody:not(#drillBody) > tr:nth-child(12) { animation-delay: .45s; }
+
+        /* Pop-ups (delete / logout / return / details): the dark backdrop fades in and the box pops up.
+           They are shown by removing the "hidden" class, which is what starts the animation. */
+        .fixed.inset-0:not(.hidden) { animation: softIn .18s ease-out; }
+        .fixed.inset-0:not(.hidden) > div { animation: popIn .22s cubic-bezier(.22, 1, .36, 1); }
+
+        /* Search lists and menus drop down */
+        [role="listbox"]:not(.hidden),
+        [role="menu"]:not(.hidden) { animation: dropIn .14s ease-out; }
+
+        /* Buttons and links: smooth colour change, and a small press effect */
+        a, button { transition: color .15s ease, background-color .15s ease, border-color .15s ease, box-shadow .2s ease, transform .15s ease; }
+        button:not(:disabled):active,
+        a[class*="bg-amber-600"]:active,
+        a[class*="rounded-lg"]:active { transform: scale(.97); }
+
+        /* Sidebar: links nudge to the right on hover */
+        .sidebar-link:hover { transform: translateX(3px); }
+
+        /* Cards that are links (dashboard stat cards, report cards) lift a little on hover */
+        main a.group.rounded-xl:hover,
+        main a.group.rounded-2xl:hover { transform: translateY(-2px); }
+
+        /* Progress / stock bars grow from the left */
+        main .rounded-full.overflow-hidden > .h-full.rounded-full { animation: barGrow .7s cubic-bezier(.22, 1, .36, 1) backwards; transform-origin: left; }
+
+        @keyframes barGrow {
+            from { transform: scaleX(0); }
+            to { transform: none; }
+        }
+
+        /* The bell swings when there are unread notifications */
+        a[href$="/notifications"]:has(.animate-pulse) .fa-bell { animation: bellRing 1.2s ease-in-out 1s 2; transform-origin: 50% 0; display: inline-block; }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: .01ms !important;
+                animation-delay: 0s !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: .01ms !important;
+            }
+        }
+
         @media print {
+            *, *::before, *::after {
+                animation: none !important;
+                transition: none !important;
+            }
+
             @page {
                 size: auto;
                 margin: 12mm;
@@ -420,7 +559,6 @@
 
                 </button>
 
-                @unless(auth()->user()->isOwner())
                 <a href="{{ route('notifications.index') }}"
                     class="relative p-2 rounded-full hover:bg-slate-100 transition text-slate-500">
 
@@ -438,7 +576,6 @@
                     @endif
 
                 </a>
-                @endunless
 
             </header>
 

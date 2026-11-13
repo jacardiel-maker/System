@@ -151,7 +151,7 @@
                                             {{ ucfirst($cond ?: 'unknown') }}
                                         </span>
                                     </div>
-                                    <p class="text-[11px] text-slate-400 font-mono truncate">{{ $item->serial_code ?: 'No serial code' }}</p>
+                                    <p class="text-[11px] text-slate-400 font-mono truncate">{{ $item->serial_code ?: 'No item code' }}</p>
 
                                     <div class="mt-2 flex items-center gap-2">
                                         <div class="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">

@@ -441,16 +441,38 @@
             renderWarning();
         }
 
-        function renderPanel(day, events) {
+        // Only `limit` events can be booked per day: a full day blocks the Save button (the server refuses it too).
+        // An event that stays on its own day is never blocked.
+        const originalDay = @json($event->event_date?->format('Y-m-d'));
+
+        function setDayFull(full) {
+            const submit = dateInput.form ? dateInput.form.querySelector('button[type="submit"]') : null;
+            if (!submit) return;
+            submit.disabled = full;
+            submit.classList.toggle('opacity-50', full);
+            submit.classList.toggle('cursor-not-allowed', full);
+            submit.title = full ? 'This day is fully booked. Pick another date.' : '';
+        }
+
+        function renderPanel(day, events, full, limit) {
+            full = full && day !== originalDay;
             panel.replaceChildren();
+            setDayFull(full);
             if (!events.length) {
                 panel.className = 'rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800';
                 panel.textContent = 'No other events on ' + prettyDay(day) + '. All active waiters are free that day.';
                 return;
             }
-            panel.className = 'rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900';
-            panel.appendChild(make('p', 'font-semibold mb-1.5',
-                events.length + ' other ' + (events.length > 1 ? 'events' : 'event') + ' on ' + prettyDay(day) + ':'));
+            if (full) {
+                panel.className = 'rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800';
+                panel.appendChild(make('p', 'font-semibold mb-1.5',
+                    prettyDay(day) + ' is fully booked (' + events.length + ' of ' + limit + ' events). Please pick another date.'));
+            } else {
+                panel.className = 'rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900';
+                panel.appendChild(make('p', 'font-semibold mb-1.5',
+                    events.length + ' other ' + (events.length > 1 ? 'events' : 'event') + ' on ' + prettyDay(day)
+                    + ' (maximum of ' + limit + ' events per day):'));
+            }
 
             const list = make('ul', 'space-y-1');
             events.forEach(ev => {
@@ -476,6 +498,7 @@
                 loadedDay = null;
                 busy = {};
                 panel.classList.add('hidden');
+                setDayFull(false);
                 renderRows('none');
                 return;
             }
@@ -500,7 +523,7 @@
 
                 busy = data.busy || {};
                 loadedDay = day;
-                renderPanel(day, data.events || []);
+                renderPanel(day, data.events || [], !!data.full, data.limit || 2);
                 panel.classList.remove('hidden');
                 renderRows('ready');
             } catch (e) {
@@ -508,6 +531,7 @@
                 busy = {};
                 loadedDay = null;
                 panel.classList.add('hidden');
+                setDayFull(false);
                 renderRows('error');
             }
         }

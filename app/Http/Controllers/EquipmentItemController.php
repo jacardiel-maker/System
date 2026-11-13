@@ -21,7 +21,7 @@ class EquipmentItemController extends Controller
     {
         $query = EquipmentItem::with('category');
 
-        // Search by item name or serial code
+        // Search by item name or item code (stored in the serial_code column)
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {

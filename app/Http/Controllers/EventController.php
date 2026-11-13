@@ -14,6 +14,33 @@ use Illuminate\Http\Request;
 
 class EventController extends Controller
 {
+    /** At most this many (non-cancelled) events can be booked on one day. */
+    public const MAX_EVENTS_PER_DAY = 2;
+
+    /** How many non-cancelled events are booked on the given day (optionally ignoring one event). */
+    private function eventsOnDay($date, ?int $excludeEventId = null): int
+    {
+        return Event::whereDate('event_date', Carbon::parse($date)->toDateString())
+            ->where(function ($q) {
+                $q->whereNull('status')->orWhere('status', '!=', 'cancelled');
+            })
+            ->when($excludeEventId, fn ($q) => $q->where('id', '!=', $excludeEventId))
+            ->count();
+    }
+
+    /** Stop the save (back to the form with an error) if that day already has the maximum number of events. */
+    private function throwIfDayFull($date, ?int $excludeEventId = null): void
+    {
+        if ($this->eventsOnDay($date, $excludeEventId) < self::MAX_EVENTS_PER_DAY) {
+            return;
+        }
+
+        throw \Illuminate\Validation\ValidationException::withMessages([
+            'event_date' => Carbon::parse($date)->format('F d, Y') . ' is fully booked. Only '
+                . self::MAX_EVENTS_PER_DAY . ' events can be scheduled per day. Please pick another date.',
+        ]);
+    }
+
     public function index(Request $request)
     {
         $query = Event::withCount('waiters', 'equipment');
@@ -137,6 +164,8 @@ class EventController extends Controller
                 'waiter_count' => $event->waiters->count(),
             ])->values(),
             'busy' => (object) $busy,
+            'limit' => self::MAX_EVENTS_PER_DAY,
+            'full' => $events->count() >= self::MAX_EVENTS_PER_DAY,
         ]);
     }
 
@@ -215,7 +244,12 @@ class EventController extends Controller
             'waiters' => 'nullable|array',
             'waiters.*.id' => 'exists:waiters,id',
             'waiters.*.role' => 'in:head_waiter,waiter,setup_crew',
+        ], [
+            'setup_time.before' => 'Setup must be scheduled before the event starts.',
         ]);
+
+        // Only 2 events per day
+        $this->throwIfDayFull($validated['event_date']);
 
         // A waiter who is already on another event that day cannot be assigned again
         $this->throwIfWaitersBusy(
@@ -284,17 +318,17 @@ class EventController extends Controller
             'customer_name' => 'required|string|max:255',
             'venue_address' => 'required|string',
             'event_date' => 'required|date',
-            'setup_time' => 'required|date',
+            'setup_time' => 'required|date|before:event_date',
             'guest_count' => 'nullable|integer|min:1',
             'status' => 'in:scheduled,ongoing,completed,cancelled',
             'notes' => 'nullable|string',
             'waiters' => 'nullable|array',
             'waiters.*.id' => 'exists:waiters,id',
             'waiters.*.role' => 'in:head_waiter,waiter,setup_crew',
+        ], [
+            'setup_time.before' => 'Setup must be scheduled before the event starts.',
         ]);
 
-        // A waiter who is already on another event that day cannot be assigned again.
-        // Check the newly added waiters (or everyone, if the event was moved to another day).
         $submittedIds = collect($validated['waiters'] ?? [])
             ->filter(fn ($w) => !empty($w['id']))
             ->pluck('id')
@@ -303,6 +337,34 @@ class EventController extends Controller
         $existingIds = $event->waiters()->pluck('waiters.id')->map(fn ($id) => (int) $id)->all();
         $dayChanged = !$event->event_date
             || $event->event_date->toDateString() !== Carbon::parse($validated['event_date'])->toDateString();
+
+        $oldStatus = strtolower(trim((string) $event->status));
+        $newStatus = $validated['status'] ?? $oldStatus;
+
+        // Only 2 events per day: checked when the event moves to another day or is brought back from "cancelled"
+        if ($newStatus !== 'cancelled' && ($dayChanged || $oldStatus === 'cancelled')) {
+            $this->throwIfDayFull($validated['event_date'], $event->id);
+        }
+
+        // Waiters and equipment must already be set up before the event can start
+        if (in_array($newStatus, ['ongoing', 'completed']) && !in_array($oldStatus, ['ongoing', 'completed'])) {
+            $missing = [];
+            if (empty($submittedIds)) {
+                $missing[] = 'assign at least one waiter';
+            }
+            if (!$event->equipment()->exists()) {
+                $missing[] = 'allocate the equipment';
+            }
+            if ($missing) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'status' => 'This event is not set up yet. Please ' . implode(' and ', $missing)
+                        . ' before marking it as ' . $newStatus . '.',
+                ]);
+            }
+        }
+
+        // A waiter who is already on another event that day cannot be assigned again.
+        // Check the newly added waiters (or everyone, if the event was moved to another day).
         $this->throwIfWaitersBusy(
             $dayChanged ? $submittedIds : array_values(array_diff($submittedIds, $existingIds)),
             $validated['event_date'],
@@ -413,8 +475,8 @@ class EventController extends Controller
         }
         $event->waiters()->updateExistingPivot($waiter->id, $pivot);
 
-        // Notify every owner/admin account (bell + email), plus the event creator
-        $admins = User::all()->filter(fn ($user) => $user->isAdmin());
+        // Notify the admin and owner accounts (bell + email), plus the event creator
+        $admins = User::all()->filter(fn ($user) => $user->canMonitor());
         if ($event->creator) {
             $admins->push($event->creator);
         }

@@ -103,7 +103,7 @@
         <div class="px-5 py-3 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between gap-2">
             <div>
                 @if($eventId)
-                    @if(auth()->user()->isAdmin())
+                    @if(auth()->user()->canMonitor())
                         <a href="{{ route('events.show', $eventId) }}"
                             class="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-amber-700 transition">
                             <i class="fas fa-eye text-xs"></i> View Event

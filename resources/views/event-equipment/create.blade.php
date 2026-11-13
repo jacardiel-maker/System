@@ -83,8 +83,8 @@
         @csrf
 
         {{-- Event & Waiter Selection --}}
-        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-            <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200">
+            <div class="rounded-t-2xl px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
                 <div class="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
@@ -169,7 +169,9 @@
                                 </div>
                                 <div class="flex-1 min-w-0">
                                     <div class="text-sm font-semibold text-slate-900 group-hover:text-amber-800 transition-colors">{{ $item->name }}</div>
-                                    <div class="text-xs text-slate-500 mt-0.5">Serial: {{ $item->serial_code ?? 'N/A' }}</div>
+                                    @if($item->serial_code)
+                                        <div class="text-xs text-slate-500 mt-0.5">Item Code: {{ $item->serial_code }}</div>
+                                    @endif
                                     <div class="flex items-center gap-2 mt-2">
                                         <span class="text-xs font-medium {{ $item->available_quantity < 10 ? 'text-rose-600' : 'text-emerald-600' }}">
                                             {{ $item->available_quantity }} available
@@ -263,160 +265,5 @@
     // Initialize on page load
     updateSelectedCount();
 </script>
-<script>
-    // Turns the Event and Waiter dropdowns into searchable boxes: type to filter, click or press Enter to pick.
-    // Works on any <select data-searchable="placeholder text" data-required-message="...">.
-    // The original <select> stays in the form and still does the submitting.
-    (function () {
-        const enhanced = [];
-
-        function enhance(select) {
-            const options = Array.from(select.options)
-                .filter(o => o.value !== '')
-                .map(o => ({ value: o.value, label: o.textContent.replace(/\s+/g, ' ').trim() }));
-
-            const wrap = select.parentElement;
-            const inputClass = select.className.replace('appearance-none', '').replace('cursor-pointer', '');
-
-            select.classList.add('hidden');
-            select.required = false; // a hidden required field cannot be focused, so it is checked on submit instead
-            select.tabIndex = -1;
-
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.autocomplete = 'off';
-            input.placeholder = select.dataset.searchable || 'Search...';
-            input.className = inputClass;
-            input.setAttribute('role', 'combobox');
-            input.setAttribute('aria-expanded', 'false');
-            input.setAttribute('aria-autocomplete', 'list');
-
-            const list = document.createElement('ul');
-            list.setAttribute('role', 'listbox');
-            list.className = 'hidden absolute left-0 right-0 top-full z-30 mt-1 max-h-60 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg';
-            // keep focus in the input when the list (or its scrollbar) is clicked
-            list.addEventListener('mousedown', e => e.preventDefault());
-
-            const error = document.createElement('p');
-            error.className = 'hidden text-xs text-rose-600 font-medium';
-            error.textContent = select.dataset.requiredMessage || 'Please choose one.';
-
-            select.after(input);
-            input.after(list);
-            wrap.after(error);
-
-            let shown = options;
-            let active = -1;
-
-            function current() { return options.find(o => o.value === select.value) || null; }
-            function isOpen() { return !list.classList.contains('hidden'); }
-
-            function setActive(i) {
-                active = i;
-                Array.from(list.children).forEach((li, idx) => li.classList.toggle('bg-amber-50', idx === i));
-                const li = list.children[i];
-                if (li && li.scrollIntoView) li.scrollIntoView({ block: 'nearest' });
-            }
-
-            function render() {
-                list.replaceChildren();
-                if (!shown.length) {
-                    const li = document.createElement('li');
-                    li.className = 'px-4 py-2 text-sm text-slate-400';
-                    li.textContent = 'No match found';
-                    list.appendChild(li);
-                    return;
-                }
-                const picked = current();
-                shown.forEach((opt, idx) => {
-                    const li = document.createElement('li');
-                    li.setAttribute('role', 'option');
-                    li.className = 'cursor-pointer px-4 py-2 text-sm '
-                        + (picked && picked.value === opt.value ? 'font-semibold text-amber-700' : 'text-slate-700');
-                    li.textContent = opt.label;
-                    li.addEventListener('mousedown', e => { e.preventDefault(); choose(opt); });
-                    li.addEventListener('mousemove', () => { if (active !== idx) setActive(idx); });
-                    list.appendChild(li);
-                });
-            }
-
-            function open() {
-                list.classList.remove('hidden');
-                input.setAttribute('aria-expanded', 'true');
-                render();
-                const picked = current();
-                const idx = picked ? shown.findIndex(o => o.value === picked.value) : 0;
-                setActive(shown.length ? Math.max(idx, 0) : -1);
-            }
-
-            function close() {
-                list.classList.add('hidden');
-                input.setAttribute('aria-expanded', 'false');
-            }
-
-            function choose(opt) {
-                select.value = opt.value;
-                input.value = opt.label;
-                error.classList.add('hidden');
-                select.dispatchEvent(new Event('change', { bubbles: true }));
-                close();
-            }
-
-            input.addEventListener('focus', () => { input.select(); shown = options; open(); });
-            input.addEventListener('click', () => { if (!isOpen()) { shown = options; open(); } });
-
-            input.addEventListener('input', () => {
-                const term = input.value.trim().toLowerCase();
-                shown = term ? options.filter(o => o.label.toLowerCase().includes(term)) : options;
-                open();
-            });
-
-            input.addEventListener('keydown', e => {
-                if (e.key === 'ArrowDown') {
-                    e.preventDefault();
-                    if (!isOpen()) { shown = options; open(); }
-                    else if (shown.length) setActive(Math.min(active + 1, shown.length - 1));
-                } else if (e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    if (isOpen() && shown.length) setActive(Math.max(active - 1, 0));
-                } else if (e.key === 'Enter') {
-                    if (isOpen()) { // Enter picks the highlighted option instead of submitting the form
-                        e.preventDefault();
-                        if (active >= 0 && shown[active]) choose(shown[active]);
-                    }
-                } else if (e.key === 'Escape') {
-                    if (isOpen()) {
-                        e.preventDefault();
-                        close();
-                        input.value = current() ? current().label : '';
-                    }
-                }
-            });
-
-            input.addEventListener('blur', () => {
-                close();
-                if (input.value.trim() === '') select.value = '';           // emptied the box = cleared the choice
-                else input.value = current() ? current().label : '';        // half-typed text snaps back to the real choice
-            });
-
-            const picked = current();
-            input.value = picked ? picked.label : '';
-
-            enhanced.push({ select, input, showError: () => error.classList.remove('hidden') });
-        }
-
-        document.querySelectorAll('select[data-searchable]').forEach(enhance);
-
-        const form = document.getElementById('allocationForm');
-        if (form) {
-            form.addEventListener('submit', e => {
-                const missing = enhanced.filter(c => !c.select.value);
-                if (!missing.length) return;
-                e.preventDefault();
-                missing.forEach(c => c.showError());
-                missing[0].input.focus();
-            });
-        }
-    })();
-</script>
+@include('partials.searchable-select')
 @endsection

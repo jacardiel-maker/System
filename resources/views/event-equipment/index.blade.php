@@ -72,9 +72,9 @@
             </div>
 
             {{-- Filter by Waiter --}}
-            <div class="w-full lg:w-40">
+            <div class="relative w-full lg:w-52">
                 <label for="f-waiter" class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Waiter</label>
-                <select id="f-waiter" name="waiter_id" onchange="this.form.submit()"
+                <select id="f-waiter" name="waiter_id" onchange="this.form.submit()" data-searchable="All waiters (type to search)"
                     class="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent bg-white">
                     <option value="">All Waiters</option>
                     @foreach($waiters as $w)
@@ -85,19 +85,7 @@
                 </select>
             </div>
 
-            {{-- Date From --}}
-            <div class="w-full lg:w-36">
-                <label for="f-from" class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">From</label>
-                <input id="f-from" type="date" name="from" value="{{ request('from') }}" max="{{ request('to') }}"
-                    class="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent">
-            </div>
-
-            {{-- Date To --}}
-            <div class="w-full lg:w-36">
-                <label for="f-to" class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">To</label>
-                <input id="f-to" type="date" name="to" value="{{ request('to') }}" min="{{ request('from') }}"
-                    class="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent">
-            </div>
+            @include('partials.date-range', ['label' => 'Date Range'])
 
             {{-- Buttons --}}
             <div class="flex gap-2 w-full lg:w-auto">
@@ -462,11 +450,7 @@
                 }
             });
 
-            // ---------- Keep From <= To ----------
-            const from = document.getElementById('f-from');
-            const to = document.getElementById('f-to');
-            from.addEventListener('change', () => { to.min = from.value; });
-            to.addEventListener('change', () => { from.max = to.value; });
         })();
     </script>
+@include('partials.searchable-select')
 @endsection

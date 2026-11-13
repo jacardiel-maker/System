@@ -323,15 +323,40 @@
             $lowStockCount = \App\Models\EquipmentItem::where('available_quantity', '>', 0)
                 ->whereRaw('available_quantity * 100 < total_quantity * 20')
                 ->count();
+
+            // ---- Owner only: business figures (the manager sees the operational cards instead) ----
+            if ($readOnly) {
+                $monthFrom = now()->startOfMonth();
+                $monthTo = now()->endOfMonth();
+                $notCancelled = fn ($q) => $q->whereNull('status')->orWhere('status', '!=', 'cancelled');
+
+                $ownerEventsThisMonth = \App\Models\Event::whereBetween('event_date', [$monthFrom, $monthTo])->where($notCancelled)->count();
+                $ownerEventsLastMonth = \App\Models\Event::whereBetween('event_date', [$monthFrom->copy()->subMonthNoOverflow(), $monthFrom->copy()->subSecond()])->where($notCancelled)->count();
+                $ownerCompleted = $statusCounts[2];
+                $ownerCancelled = $statusCounts[3];
+                $ownerClosed = $ownerCompleted + $ownerCancelled;
+                $ownerCompletionRate = $ownerClosed > 0 ? round($ownerCompleted * 100 / $ownerClosed) : null;
+                $ownerGuestsThisMonth = (int) \App\Models\Event::whereBetween('event_date', [$monthFrom, $monthTo])->where($notCancelled)->sum('guest_count');
+                $ownerUnitsTotal = (int) \App\Models\EquipmentItem::sum('total_quantity');
+                $ownerUnitsOut = max($ownerUnitsTotal - (int) \App\Models\EquipmentItem::sum('available_quantity'), 0);
+                $ownerDamaged = (int) \App\Models\EventEquipment::sum('quantity_damaged');
+                $ownerMissing = (int) \App\Models\EventEquipment::sum('quantity_missing');
+            }
         @endphp
 
         <div class="flex flex-col gap-4">
 
             {{-- ROW A: title + bell + clock --}}
-            <div class="shrink-0 flex items-center justify-between gap-3">
+            <div class="shrink-0 flex items-center justify-between gap-3 {{ $readOnly ? 'rounded-2xl bg-gradient-to-r from-slate-900 to-slate-700 px-5 py-4 shadow-sm' : '' }}">
                 <div class="min-w-0">
-                    <h1 class="text-2xl font-bold text-slate-900 tracking-tight leading-tight">Dashboard</h1>
-                    <p class="text-xs text-slate-500 truncate">{{ $readOnly ? 'Owner view: a read-only overview of your catering operations.' : "Welcome back, here's what's happening today." }}</p>
+                    @if($readOnly)
+                        <p class="text-[11px] font-semibold uppercase tracking-widest text-amber-400">Owner</p>
+                        <h1 class="text-2xl font-bold text-white tracking-tight leading-tight">Business Overview</h1>
+                        <p class="text-xs text-slate-300 truncate">How the business is doing as of {{ now()->format('F d, Y') }}. View only.</p>
+                    @else
+                        <h1 class="text-2xl font-bold text-slate-900 tracking-tight leading-tight">Manager Dashboard</h1>
+                        <p class="text-xs text-slate-500 truncate">Welcome back, here's what needs your attention today.</p>
+                    @endif
                 </div>
 
                 <div class="flex items-center gap-2 shrink-0">
@@ -340,7 +365,7 @@
                             class="hidden sm:inline-flex items-center gap-2 h-11 px-4 rounded-xl bg-amber-600 text-sm font-semibold text-white shadow-sm hover:bg-amber-700 transition">
                             <i class="fas fa-chart-pie text-xs"></i> View Reports
                         </a>
-                    @else
+                    @endif
                     {{-- Notification Bell (desktop only; on mobile it lives in the top bar) --}}
                     <a href="{{ route('notifications.index') }}"
                         class="hidden md:flex relative w-11 h-11 items-center justify-center bg-white rounded-xl shadow-sm border border-slate-100 text-slate-500 hover:text-amber-600 hover:shadow-md transition-all">
@@ -353,7 +378,6 @@
                         @endif
                     </a>
 
-                    @endif
 
                     {{-- Live Clock --}}
                     <div class="inline-flex items-center gap-2.5 bg-white rounded-xl shadow-sm border border-slate-100 px-3 h-11">
@@ -371,7 +395,37 @@
                 </div>
             </div>
 
-            {{-- ROW B: stat cards --}}
+            {{-- ROW B (owner): business figures; each card opens the records behind it --}}
+            @if($readOnly)
+            @php
+                $monthDiff = $ownerEventsThisMonth - $ownerEventsLastMonth;
+                $ownerCards = [
+                    ['kpi' => 'month', 'icon' => 'fa-calendar-check', 'tone' => 'bg-amber-100 text-amber-600', 'value' => $ownerEventsThisMonth, 'label' => 'Events this month',
+                        'sub' => ($monthDiff === 0 ? 'Same as last month' : ($monthDiff > 0 ? '+' . $monthDiff : $monthDiff) . ' vs last month') . ' · ' . number_format($ownerGuestsThisMonth) . ' guests'],
+                    ['kpi' => 'completed', 'icon' => 'fa-circle-check', 'tone' => 'bg-emerald-100 text-emerald-600', 'value' => $ownerCompletionRate === null ? '—' : $ownerCompletionRate . '%', 'label' => 'Completion rate',
+                        'sub' => $ownerCompleted . ' completed · ' . $ownerCancelled . ' cancelled'],
+                    ['kpi' => 'out', 'icon' => 'fa-truck-ramp-box', 'tone' => 'bg-blue-100 text-blue-600', 'value' => number_format($ownerUnitsOut), 'label' => 'Equipment units in use',
+                        'sub' => 'of ' . number_format($ownerUnitsTotal) . ' units owned · ' . $lowStockCount . ' low-stock ' . Str::plural('item', $lowStockCount)],
+                    ['kpi' => 'losses', 'icon' => 'fa-triangle-exclamation', 'tone' => 'bg-rose-100 text-rose-600', 'value' => number_format($ownerDamaged + $ownerMissing), 'label' => 'Damaged / missing units',
+                        'sub' => $ownerDamaged . ' damaged · ' . $ownerMissing . ' missing (all time)'],
+                ];
+            @endphp
+            <div class="shrink-0 grid grid-cols-2 lg:grid-cols-4 gap-3">
+                @foreach($ownerCards as $card)
+                    <a href="#" onclick="openOwnerKpi('{{ $card['kpi'] }}'); return false;"
+                        class="group bg-white rounded-xl p-4 shadow-sm border border-slate-100 hover:border-amber-200 hover:shadow-md transition">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-500 truncate">{{ $card['label'] }}</span>
+                            <span class="w-8 h-8 rounded-lg {{ $card['tone'] }} flex items-center justify-center shrink-0"><i class="fas {{ $card['icon'] }} text-xs"></i></span>
+                        </div>
+                        <div class="mt-2 text-3xl font-bold text-slate-900 leading-none tabular-nums">{{ $card['value'] }}</div>
+                        <div class="mt-2 text-[11px] text-slate-500 truncate">{{ $card['sub'] }}</div>
+                        <div class="mt-2 text-[11px] font-semibold text-amber-700 opacity-0 group-hover:opacity-100 transition">View details <i class="fas fa-arrow-right text-[9px]"></i></div>
+                    </a>
+                @endforeach
+            </div>
+            @else
+            {{-- ROW B (manager): operational stat cards --}}
             <div class="shrink-0 grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <a @if($readOnly) href="#" onclick="openOwnerEvents('all'); return false;" @else href="{{ route('events.index') }}" @endif class="group bg-white rounded-xl px-3 py-2 shadow-sm border border-slate-100 flex items-center gap-3 hover:border-amber-200 hover:shadow-md transition">
                     <div class="w-9 h-9 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
@@ -429,9 +483,10 @@
                     @unless($readOnly)<i class="fas fa-chevron-right text-[10px] text-slate-300 group-hover:text-amber-500 ml-auto transition"></i>@endunless
                 </a>
             </div>
+            @endif
 
-            {{-- ROW C: upcoming events (left) + calendar (right) --}}
-            <div class="shrink-0 lg:h-[calc(100vh-15rem)] lg:min-h-[460px] grid grid-cols-1 lg:grid-cols-12 lg:grid-rows-[minmax(0,1fr)] gap-3">
+            {{-- ROW C: upcoming events (left) + calendar (right). Manager: right under the cards. Owner: below the analytics. --}}
+            <div class="{{ $readOnly ? 'order-2' : '' }} shrink-0 lg:h-[calc(100vh-15rem)] lg:min-h-[460px] grid grid-cols-1 lg:grid-cols-12 lg:grid-rows-[minmax(0,1fr)] gap-3">
 
                 {{-- Upcoming Events --}}
                 <div class="lg:col-span-4 lg:min-h-0 max-h-[360px] lg:max-h-none bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden flex flex-col">
@@ -527,11 +582,11 @@
             </script>
 
             {{-- ROW D: analytics --}}
-            <div class="shrink-0 mt-2">
-                <h2 class="text-lg font-bold text-slate-900 tracking-tight">Analytics</h2>
+            <div class="{{ $readOnly ? 'order-1' : 'mt-2' }} shrink-0">
+                <h2 class="text-lg font-bold text-slate-900 tracking-tight">{{ $readOnly ? 'Business Analytics' : 'Analytics' }}</h2>
                 <p class="text-xs text-slate-500">Events and equipment at a glance. <span class="text-slate-400">Click a bar, slice or point to see the records behind it.</span></p>
             </div>
-            <div class="shrink-0 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div class="{{ $readOnly ? 'order-1' : '' }} shrink-0 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {{-- Events Trend --}}
                 <div class="md:col-span-2 bg-white rounded-xl p-5 shadow-sm border border-slate-100 h-[320px] flex flex-col">
                     <div class="shrink-0 flex items-center justify-between gap-2 mb-4">
@@ -763,6 +818,20 @@
                 }
             };
             window.dashboardOpenEvent = function (id) { openEvent(id, false); };
+
+            // Owner: each business figure card opens the records behind it
+            window.openOwnerKpi = function (which) {
+                if (which === 'month') {
+                    const now = new Date(), ym = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+                    showEvents('Events this month', DRILL.events.filter(e => (e.date || '').slice(0, 7) === ym && e.status !== 'cancelled').sort((a, b) => a.date < b.date ? -1 : 1));
+                } else if (which === 'completed') {
+                    showEvents('Completed and cancelled events', DRILL.events.filter(e => e.status === 'completed' || e.status === 'cancelled'), true);
+                } else if (which === 'out') {
+                    showItems('Equipment currently in use', DRILL.items.filter(i => i.inUse > 0).sort((a, b) => b.inUse - a.inUse));
+                } else if (which === 'losses') {
+                    showItems('Items with damaged units reported', DRILL.items.filter(i => i.damagedUnits > 0).sort((a, b) => b.damagedUnits - a.damagedUnits));
+                }
+            };
 
             function showItems(title, rows) {
                 const units = rows.reduce((t, i) => t + i.total, 0), avail = rows.reduce((t, i) => t + i.available, 0);

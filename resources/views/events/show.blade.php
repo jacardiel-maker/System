@@ -76,6 +76,43 @@
         </div>
     </div>
 
+    {{-- Setup readiness: waiters and equipment must be in place before the event --}}
+    @php
+        $activeWaiters = $event->waiters->filter(fn ($w) => strtolower(trim((string) $w->pivot->confirmation_status)) !== 'declined')->count();
+        $setupMissing = [];
+        if ($activeWaiters === 0) $setupMissing[] = 'no waiters assigned';
+        if ($event->equipment->isEmpty()) $setupMissing[] = 'no equipment allocated';
+    @endphp
+    @if($eventStatus === 'scheduled' || $eventStatus === '')
+        @if($setupMissing)
+            <div class="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
+                <div class="flex items-start gap-3 flex-1 min-w-0">
+                    <i class="fas fa-triangle-exclamation text-amber-500 mt-0.5"></i>
+                    <div class="text-sm text-amber-900">
+                        <p class="font-semibold">Setup not complete: {{ implode(' and ', $setupMissing) }}.</p>
+                        <p class="text-xs text-amber-800">Waiters and equipment must be set up before the event
+                            @if($event->setup_time)(setup starts {{ $event->setup_time->format('M d, Y h:i A') }})@endif.
+                            The event cannot be marked Ongoing until this is done.</p>
+                    </div>
+                </div>
+                @unless($readOnly)
+                    <div class="flex gap-2 shrink-0">
+                        @if($activeWaiters === 0)
+                            <a href="{{ route('events.edit', $event) }}" class="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 transition"><i class="fas fa-users text-[10px]"></i> Assign waiters</a>
+                        @endif
+                        @if($event->equipment->isEmpty())
+                            <a href="{{ route('event-equipment.create', ['event_id' => $event->id]) }}" class="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 transition"><i class="fas fa-box text-[10px]"></i> Allocate equipment</a>
+                        @endif
+                    </div>
+                @endunless
+            </div>
+        @else
+            <div class="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 flex items-center gap-2 text-sm font-medium text-emerald-800">
+                <i class="fas fa-circle-check text-emerald-500"></i> Setup complete: waiters and equipment are in place for this event.
+            </div>
+        @endif
+    @endif
+
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {{-- Main Content --}}
         <div class="lg:col-span-2 space-y-4">
